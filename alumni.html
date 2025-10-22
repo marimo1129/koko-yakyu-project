@@ -1,0 +1,27 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>卒業生一覧 | 高校野球</title>
+  <link rel="stylesheet" href="./assets/styles.css" />
+  <script defer src="./assets/app.js"></script>
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand" onclick="goHome()">高校野球データポータル</div>
+    <nav class="actions">
+      <button class="btn ghost" onclick="goBack()">← 戻る</button>
+      <a class="btn" href="./index.html">🏠 ホーム</a>
+    </nav>
+  </header>
+  <main class="container">
+    <h1>卒業生一覧</h1>
+    <section id="alumniList" class="grid"></section>
+  </main>
+  <footer class="footer">
+    <button class="icon-btn" onclick="goBack()">← 戻る</button>
+    <button class="icon-btn" onclick="goHome()">🏠 ホーム</button>
+  </footer>
+</body>
+</html>
