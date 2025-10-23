@@ -4,10 +4,15 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>卒業生一覧 | 高校野球</title>
-  <link rel="stylesheet" href="./assets/styles.css" />
- <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
-<script defer src="./assets/app.js"></script>
 
+  <!-- 共通スタイル -->
+  <link rel="stylesheet" href="./assets/styles.css" />
+
+  <!-- CSVを確実に読むためのライブラリ（先に読み込むのが超重要） -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
+
+  <!-- 共通JS（ナビゲーションなど） -->
+  <script defer src="./assets/app.js"></script>
 </head>
 <body>
   <header class="topbar">
@@ -17,46 +22,91 @@
       <a class="btn" href="./index.html">🏠 ホーム</a>
     </nav>
   </header>
+
   <main class="container">
     <h1>卒業生一覧</h1>
+
+    <!-- 一覧を描画する場所 -->
     <section id="alumniList" class="grid"></section>
   </main>
+
   <footer class="footer">
     <button class="icon-btn" onclick="goBack()">← 戻る</button>
     <button class="icon-btn" onclick="goHome()">🏠 ホーム</button>
   </footer>
+
+  <!-- ─────────────────────────────────────────────
+       ここから “単独で動く描画スクリプト”
+       app.js に依存せず、これだけで players.csv を表示します。
+       うまく動いたら、あとで app.js に統合してOK。
+  ───────────────────────────────────────────── -->
   <script>
-(async () => {
-  try {
-    const res = await fetch('./data/players.csv');
-    if (!res.ok) throw new Error('players.csv が読み込めませんでした (' + res.status + ')');
-    const txt = await res.text();
+  (async () => {
+    try {
+      // alumni.html がリポジトリ直下にある前提のパス
+      // （もし /scripts/ 配下に置いているなら './data/...' を '../data/...' に変えてください）
+      const CSV_PATH = './data/players.csv';
 
-    const rows = Papa.parse(txt, { header: true, skipEmptyLines: true }).data;
-    const data = rows.filter(r => (r.player_name || '').trim());
+      const res = await fetch(CSV_PATH);
+      if (!res.ok) throw new Error(`players.csv を取得できませんでした（HTTP ${res.status}）`);
+      const text = await res.text();
 
-    const list = document.querySelector('#alumniList');
-    list.innerHTML = '';
-    if (data.length === 0) {
-      list.innerHTML = '<p class="muted">表示できる卒業生データが見つかりませんでした。</p>';
-      return;
+      // PapaParseで確実にパース
+      const rows = Papa.parse(text, { header: true, skipEmptyLines: true }).data;
+
+      // 表示用に空行を除外
+      const data = rows.filter(r => (r.player_name || '').trim());
+
+      const list = document.querySelector('#alumniList');
+      list.innerHTML = '';
+
+      if (data.length === 0) {
+        list.innerHTML = '<p class="muted">表示できる卒業生データが見つかりませんでした（players.csv を確認してください）。</p>';
+        return;
+      }
+
+      // 各カードを描画
+      data.forEach(r => {
+        const card = document.createElement('article');
+        card.className = 'card';
+
+        // コメント（任意）
+        const commentHtml = (r.comment && r.comment.trim())
+          ? `<p class="muted" style="margin-top:6px">${r.comment}</p>`
+          : '';
+
+        card.innerHTML = `
+          <div class="content">
+            <h3 class="title">${r.player_name || '—'}（${r.grade || ''}年・${r.position || ''}）</h3>
+            <p class="meta">${r.team_name || '—'}（${r.prefecture || ''}）</p>
+            <p class="meta2">卒業年: ${r.graduation_year || '—'}｜進路: ${(r.dest_type||'—')}${r.dest_name ? '・'+r.dest_name : ''}</p>
+            ${commentHtml}
+          </div>
+        `;
+
+        // YouTube（watch?v= / youtu.be / embed すべて対応）
+        const url = (r.youtube_url || '').trim();
+        if (url) {
+          const idMatch = url.match(/[?&]v=([\w-]{6,})|youtu\.be\/([\w-]{6,})|\/embed\/([\w-]{6,})/);
+          const vid = idMatch ? (idMatch[1] || idMatch[2] || idMatch[3]) : '';
+          if (vid) {
+            const wrap = document.createElement('div');
+            wrap.className = 'embed';
+            wrap.innerHTML = `<iframe src="https://www.youtube.com/embed/${vid}" title="YouTube" frameborder="0" allowfullscreen loading="lazy"></iframe>`;
+            card.querySelector('.content').appendChild(wrap);
+          }
+        }
+
+        list.appendChild(card);
+      });
+
+      console.log('Alumni rendered:', data.length, 'rows');
+    } catch (err) {
+      console.error(err);
+      const list = document.querySelector('#alumniList');
+      list.innerHTML = `<p class="muted">エラー：${err.message}</p>`;
     }
-
-    data.forEach(r => {
-      const node = document.createElement('article');
-      node.className = 'card';
-      node.innerHTML = `
-        <div class="content">
-          <h3 class="title">${r.player_name || '—'}（${r.grade || ''}年・${r.position || ''}）</h3>
-          <p class="meta">${r.team_name || '—'}（${r.prefecture || ''}）</p>
-          <p class="meta2">卒業年: ${r.graduation_year || '—'}｜進路: ${(r.dest_type||'—')}${r.dest_name ? '・'+r.dest_name : ''}</p>
-          ${ (r.comment && r.comment.trim()) ? `<p class="muted" style="margin-top:6px">${r.comment}</p>` : `` }
-        </div>
-      `;
-
-      if ((r.youtube_url || '').trim()) {
-        const id = (function(s){
-          c
-
+  })();
+  </script>
 </body>
 </html>
