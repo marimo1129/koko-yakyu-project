@@ -10,7 +10,8 @@ players.csv の comment_ai を自動生成（API不要）
 from __future__ import annotations
 import csv, re, pathlib
 
-ROOT = pathlib.Path(__file__).resolve().parents[1]
+import os
+ROOT = pathlib.Path(os.getcwd())
 CSV_PATH = ROOT / "data" / "players.csv"
 
 HEADER = [
