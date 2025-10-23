@@ -134,199 +134,36 @@ def parse_listing_page(tournament_id: int) -> List[str]:
                 links.append(href)
     return sorted(set(links))
 
-def parse_detail_page(url: str, tournament_name: str, tournament_id: int) -> Tuple[MatchRow, Optional[str]]:
+def parse_listing_page(tournament_id: int) -> List[str]:
     """
-    試合詳細ページから1試合分のレコードを構築。
-    ついでに「この大会のステージ情報（決勝/準決勝など）」を拾い、要約判定に使う。
+    大会トップから各試合ページURLの一覧を返す
+    例: https://vk.sportsbull.jp/koshien/game/{YEAR}/{tournament_id}/
     """
+    url = f"{BASE}/koshien/game/{YEAR}/{tournament_id}/"
     soup = get_soup(url)
+    links = set()
 
-    # チーム名
-    team_nodes = soup.select(".team-name, .c-teamName, .team__name")
-    teams = [norm(t.get_text()) for t in team_nodes if norm(t.get_text())]
-    team_a = teams[0] if len(teams) > 0 else ""
-    team_b = teams[1] if len(teams) > 1 else ""
+    # 現行構造: /match/ を拾う
+    for a in soup.select("a[href*='/koshien/game/'][href*='/match/']"):
+        href = a.get("href", "")
+        if href.startswith("/"):
+            href = BASE + href
+        links.add(href)
 
-    # スコア
-    score_text = ""
-    for node in soup.select(".score, .c-score, .match__score, .game-score"):
-        t = norm(node.get_text())
-        if SCORE_RE.search(t):
-            score_text = t
-            break
-    m = SCORE_RE.search(score_text)
-    s_a, s_b = (int(m.group(1)), int(m.group(2))) if m else (None, None)
+    # 一部ページ: /result/ を拾う
+    for a in soup.select("a[href*='/koshien/game/'][href*='/result/']"):
+        href = a.get("href", "")
+        if href.startswith("/"):
+            href = BASE + href
+        links.add(href)
 
-    # 勝者
-    winner = team_a
-    if s_a is not None and s_b is not None:
-        if s_b > s_a:
-            winner = team_b
+    # 旧構造: /detail/ をフォールバックで拾う
+    for a in soup.select("a[href*='/koshien/game/']"):
+        href = a.get("href", "")
+        if any(k in href for k in ["/detail/", "/match/", "/result/"]):
+            if href.startswith("/"):
+                href = BASE + href
+            links.add(href)
 
-    # 試合日
-    date_txt = ""
-    date_node = soup.select_one(".match-date, .c-date, time, .game-date")
-    if date_node:
-        date_txt = norm(date_node.get_text())
-        # YYYY/MM/DD or YYYY年M月D日 → YYYY-MM-DD に寄せる（ざっくり）
-        date_txt = date_txt.replace("年", "-").replace("月", "-").replace("日", "")
-        date_txt = re.sub(r"[./]", "-", date_txt)
-        date_txt = re.sub(r"[^0-9\-]", "", date_txt)
-        if len(date_txt) >= 8 and date_txt.count("-") >= 2:
-            ymd = date_txt.split("-")[:3]
-            ymd = [p.zfill(2) if i>0 else p for i,p in enumerate(ymd)]
-            date_txt = "-".join(ymd)
-        else:
-            date_txt = ""
-
-    # ステージ（決勝/準決勝など）
-    stage = ""
-    stage_node = soup.select_one(".round, .stage, .game-round, .c-round")
-    if stage_node:
-        stage = norm(stage_node.get_text())
-    round_no = int_or_none(re.search(r"(\d+)", stage).group(1)) if re.search(r"(\d+)", stage) else None
-
-    # 会場
-    venue = ""
-    v = soup.select_one(".venue, .c-venue, .game-venue")
-    if v:
-        venue = norm(v.get_text())
-
-    # 都道府県名（都道府県大会はURLやパンくずから推測）
-    prefecture = ""
-    # パンくずのどこかに都道府県名が入ることが多い
-    bc = soup.select(".breadcrumb li, .pankuzu li, .bread-crumb li, nav[aria-label='breadcrumb'] li")
-    if bc:
-        crumbs = " ".join(norm(li.get_text()) for li in bc)
-        for _id, name in PREF_MAP.items():
-            if name in crumbs:
-                prefecture = name
-                break
-
-    # 全国/地方
-    region = "全国" if prefecture == "" else "地方"
-
-    row = MatchRow(
-        year=YEAR,
-        tournament=tournament_name,
-        tournament_id=tournament_id,
-        stage=stage,
-        round_no=round_no,
-        date=date_txt,
-        region=region,
-        prefecture=prefecture,
-        team_a=team_a,
-        team_b=team_b,
-        score_a=s_a,
-        score_b=s_b,
-        winner=winner,
-        venue=venue,
-        source_url=url,
-    )
-    return row, stage or None
-
-# ================================
-# サマリー算出（優勝/準優勝/ベスト4）
-# ================================
-def summarize_tournament(tournament_name: str, tournament_id: int, matches: List[MatchRow]) -> List[SummaryRow]:
-    """
-    簡易ロジック:
-      - 「決勝」ステージの試合 → 勝者=優勝、敗者=準優勝
-      - 「準決勝」ステージの試合 → 勝者2校で決勝へ、敗者2校=ベスト4
-      ※ ステージ名の取り方はサイトの表記に依存。取り切れない場合は空欄になる。
-    """
-    pref = ""  # 都道府県大会なら later で一括決定（混在対策のため）
-    if all(m.prefecture == matches[0].prefecture for m in matches if m.prefecture):
-        pref = matches[0].prefecture
-
-    final = [m for m in matches if "決勝" in m.stage]
-    semi  = [m for m in matches if "準決勝" in m.stage]
-
-    champion = runner_up = best4_a = best4_b = ""
-
-    if final:
-        f = final[-1]  # 最終の決勝
-        champion = f.winner
-        # 敗者名
-        if f.team_a and f.team_b:
-            loser = f.team_b if f.winner == f.team_a else f.team_a
-            runner_up = loser
-
-    if semi:
-        losers = []
-        for s in semi:
-            if s.team_a and s.team_b:
-                loser = s.team_b if s.winner == s.team_a else s.team_a
-                losers.append(loser)
-        if losers:
-            best4_a = losers[0]
-        if len(losers) >= 2:
-            best4_b = losers[1]
-
-    return [SummaryRow(
-        year=YEAR,
-        tournament=tournament_name,
-        tournament_id=tournament_id,
-        prefecture=pref,
-        champion=champion,
-        runner_up=runner_up,
-        best4_a=best4_a,
-        best4_b=best4_b,
-    )]
-
-# ================================
-# メイン
-# ================================
-def main():
-    all_matches: List[MatchRow] = []
-    all_summaries: List[SummaryRow] = []
-
-    for name, ids in TARGETS:
-        id_list = list(ids)
-        for tid in id_list:
-            try:
-                listing = parse_listing_page(tid)
-            except Exception as e:
-                print(f"[WARN] listing failed tid={tid}: {e}")
-                time.sleep(SLEEP_SEC)
-                continue
-
-            print(f"[INFO] {name} tid={tid} -> {len(listing)} games")
-            tour_matches: List[MatchRow] = []
-
-            for u in listing:
-                try:
-                    row, _ = parse_detail_page(u, name, tid)
-                    tour_matches.append(row)
-                except Exception as e:
-                    print(f"[WARN] detail failed url={u}: {e}")
-                time.sleep(SLEEP_SEC)
-
-            if tour_matches:
-                all_matches.extend(tour_matches)
-                try:
-                    all_summaries.extend(summarize_tournament(name, tid, tour_matches))
-                except Exception as e:
-                    print(f"[WARN] summarize failed tid={tid}: {e}")
-
-    # CSV出力
-    with open(OUT_MATCHES, "w", newline="", encoding="utf-8") as f:
-        w = csv.DictWriter(f, fieldnames=list(asdict(all_matches[0]).keys()) if all_matches else [
-            "year","tournament","tournament_id","stage","round_no","date","region","prefecture",
-            "team_a","team_b","score_a","score_b","winner","venue","source_url"
-        ])
-        w.writeheader()
-        for r in all_matches:
-            w.writerow(asdict(r))
-
-    with open(OUT_SUMMARY, "w", newline="", encoding="utf-8") as f:
-        w = csv.DictWriter(f, fieldnames=list(asdict(SummaryRow(YEAR,"",0,"","","","","")).keys()))
-        w.writeheader()
-        for r in all_summaries:
-            w.writerow(asdict(r))
-
-    print(f"[DONE] matches={len(all_matches)} -> {OUT_MATCHES}")
-    print(f"[DONE] summaries={len(all_summaries)} -> {OUT_SUMMARY}")
-
-if __name__ == "__main__":
-    main()
+    print(f"[DEBUG] listing_page {url} -> {len(links)} links")
+    return sorted(links)
