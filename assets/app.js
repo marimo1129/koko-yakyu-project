@@ -100,7 +100,7 @@ document.addEventListener('DOMContentLoaded',()=>{
   }
 
   render();
-  // ===== 卒業生一覧 初期化 =====
+  
 // ===== 卒業生一覧 初期化（players.csv を表示）=====
 (function initAlumniPage(){
   // URLのどこかに alumni.html が含まれていれば実行
@@ -117,13 +117,15 @@ document.addEventListener('DOMContentLoaded',()=>{
     data.forEach(r => {
       const node = document.createElement('article');
       node.className = 'card';
-      node.innerHTML = `
-        <div class="content">
-          <h3 class="title">${r.player_name || '—'}（${r.grade || ''}年・${r.position || ''}）</h3>
-          <p class="meta">${r.team_name || '—'}（${r.prefecture || ''}）</p>
-          <p class="meta2">卒業年: ${r.graduation_year || '—'}｜進路: ${(r.dest_type||'—')}${r.dest_name ? '・'+r.dest_name : ''}</p>
-        </div>
-      `;
+     node.innerHTML = `
+  <div class="content">
+    <h3 class="title">${r.player_name || '—'}（${r.grade || ''}年・${r.position || ''}）</h3>
+    <p class="meta">${r.team_name || '—'}（${r.prefecture || ''}）</p>
+    <p class="meta2">卒業年: ${r.graduation_year || '—'}｜進路: ${(r.dest_type||'—')}${r.dest_name ? '・'+r.dest_name : ''}</p>
+    ${ (r.comment && r.comment.trim()) ? `<p class="muted" style="margin-top:6px">${r.comment}</p>` : `` }
+  </div>
+`;
+
 
       // コメント
       if ((r.comment || '').trim()){
