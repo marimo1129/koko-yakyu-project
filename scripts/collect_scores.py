@@ -220,3 +220,36 @@ def main():
 
 if __name__ == "__main__":
     main()
+def parse_listing_page(tournament_id: int) -> List[str]:
+    """
+    1) requests でページを取得し、__NEXT_DATA__ から試合URLを抽出
+    2) 取れなければ Playwright(Chromium) で再取得して抽出（確実版）
+    """
+    url = f"{BASE}/koshien/game/{YEAR}/{tournament_id}/"
+    soup = get_soup(url)
+
+    # まずは requests で挑戦
+    script = soup.select_one("script#__NEXT_DATA__")
+    text = script.string if script and script.string else ""
+
+    # ダメならブラウザで再取得
+    if not text:
+        print(f"[INFO] fallback to browser: {url}")
+        try:
+            text = asyncio.run(_fetch_next_data_with_browser(url))
+        except RuntimeError:
+            # 既にイベントループがある環境への保険
+            loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(loop)
+            text = loop.run_until_complete(_fetch_next_data_with_browser(url))
+            loop.close()
+
+    if not text:
+        print(f"[WARN] __NEXT_DATA__ not found even with browser: {url}")
+        return []
+
+    # 正規表現で /match/{id}/ を抜き出す
+    pat = re.compile(rf"/koshien/game/{YEAR}/{tournament_id}/match/\d+/")
+    links = sorted({(BASE + m.group(0)) for m in pat.finditer(text)})
+    print(f"[DEBUG] listing_page (NEXT_DATA) {url} -> {len(links)} links")
+    return links
