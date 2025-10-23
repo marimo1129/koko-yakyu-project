@@ -155,60 +155,41 @@ import json
 
 def parse_listing_page(tournament_id: int) -> List[str]:
     """
-    大会トップの HTML 内に埋め込まれた Next.js の __NEXT_DATA__ から
-    試合ページURL（/match/{id}/）を抜き出す
-    例: https://vk.sportsbull.jp/koshien/game/{YEAR}/{tournament_id}/
+    __NEXT_DATA__から試合ページURL一覧を抽出する
+    1) requestsで取得して試す
+    2) 取れなければPlaywrightで再取得して確実に取る
     """
     url = f"{BASE}/koshien/game/{YEAR}/{tournament_id}/"
+    print(f"[INFO] Collecting tournament {tournament_id} ...")
     soup = get_soup(url)
 
-    # __NEXT_DATA__ スクリプトを取得
+    # ---- まず requests で試す
     script = soup.select_one("script#__NEXT_DATA__")
-    if not script or not script.string:
-        print(f"[WARN] No __NEXT_DATA__ on page: {url}")
+    text = script.string if script and script.string else ""
+
+    # ---- ダメならブラウザで再取得
+    if not text:
+        print(f"[INFO] fallback to browser: {url}")
+        try:
+            text = asyncio.run(_fetch_next_data_with_browser(url))
+        except RuntimeError:
+            loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(loop)
+            text = loop.run_until_complete(_fetch_next_data_with_browser(url))
+            loop.close()
+
+    if not text:
+        print(f"[WARN] __NEXT_DATA__ not found even with browser: {url}")
         return []
 
-    # JSONを深く辿るより、文字列中の match URL を正規表現で直抜きする
-    text = script.string
+    # ---- 正規表現で /match/ID/ を抽出
+    import re
     pat = re.compile(rf"/koshien/game/{YEAR}/{tournament_id}/match/\d+/")
-    links = sorted({(BASE + m.group(0)) for m in pat.finditer(text)})
+    links = sorted({BASE + m.group(0) for m in pat.finditer(text)})
 
     print(f"[DEBUG] listing_page (NEXT_DATA) {url} -> {len(links)} links")
     return links
 
-def parse_listing_page(tournament_id: int) -> List[str]:
-    """
-    大会トップから各試合ページURLの一覧を返す
-    例: https://vk.sportsbull.jp/koshien/game/{YEAR}/{tournament_id}/
-    """
-    url = f"{BASE}/koshien/game/{YEAR}/{tournament_id}/"
-    soup = get_soup(url)
-    links = set()
-
-    # 現行構造: /match/ を拾う
-    for a in soup.select("a[href*='/koshien/game/'][href*='/match/']"):
-        href = a.get("href", "")
-        if href.startswith("/"):
-            href = BASE + href
-        links.add(href)
-
-    # 一部ページ: /result/ を拾う
-    for a in soup.select("a[href*='/koshien/game/'][href*='/result/']"):
-        href = a.get("href", "")
-        if href.startswith("/"):
-            href = BASE + href
-        links.add(href)
-
-    # 旧構造: /detail/ をフォールバックで拾う
-    for a in soup.select("a[href*='/koshien/game/']"):
-        href = a.get("href", "")
-        if any(k in href for k in ["/detail/", "/match/", "/result/"]):
-            if href.startswith("/"):
-                href = BASE + href
-            links.add(href)
-
-    print(f"[DEBUG] listing_page {url} -> {len(links)} links")
-    return sorted(links)
 def main():
     print("[INFO] Collecting test tournament 628 ...")
     listing = parse_listing_page(628)
