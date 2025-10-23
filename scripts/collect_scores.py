@@ -43,11 +43,12 @@ SLEEP_SEC = 0.7  # アクセス間隔（優しめ）
 
 async def _fetch_next_data_with_browser(url: str) -> str:
     """
-    Playwright(Chromium)でページを開き、#__NEXT_DATA__ の JSON文字列を取得
-    - networkidle ではなく domcontentloaded で遷移完了扱いにする
-    - 明示的に __NEXT_DATA__ の出現を待つ
-    - GH Actions で安定するよう no-sandbox 等を付与
+    Playwright(Chromium)でページを開き、HTMLから __NEXT_DATA__ のJSON文字列を抜き出す
+    - networkidle は使わない（広告等で止まるため）
+    - __NEXT_DATA__ が出るまで待つ
+    - 取得は inner_text ではなく page.content() + 正規表現 で確実に
     """
+    import re
     from playwright.async_api import async_playwright
 
     async with async_playwright() as p:
@@ -58,26 +59,29 @@ async def _fetch_next_data_with_browser(url: str) -> str:
         ctx = await browser.new_context(
             user_agent=UA.get("User-Agent"),
             locale="ja-JP",
-            extra_http_headers=UA,  # Accept 等も反映
+            extra_http_headers=UA,  # Accept/Language 等も反映
         )
         page = await ctx.new_page()
 
-        # domcontentloaded まで待つ（networkidle は避ける）
-        await page.goto(url, wait_until="domcontentloaded", timeout=60000)
+        # 早めに完了扱いにする
+        await page.goto(url, wait_until="domcontentloaded", timeout=90000)
 
-        # __NEXT_DATA__ が出るまで待機（最大45秒）
+        # __NEXT_DATA__ の出現を待つ（出なければそのまま次へ）
         try:
             await page.wait_for_selector("script#__NEXT_DATA__", timeout=45000)
-            handle = await page.query_selector("script#__NEXT_DATA__")
-            json_text = await handle.inner_text() if handle else ""
         except Exception:
-            # 最後の手段：直接JSで読み取り
-            json_text = await page.evaluate(
-                """() => (document.getElementById('__NEXT_DATA__') || {} ).textContent || """""
-            )
+            pass
 
+        # HTML全体から抜く（最も堅牢）
+        html = await page.content()
         await browser.close()
-        return json_text or ""
+
+    m = re.search(
+        r'<script id="__NEXT_DATA__"[^>]*>(.*?)</script>',
+        html,
+        re.DOTALL | re.IGNORECASE,
+    )
+    return (m.group(1).strip() if m else "")
 
 # ----------------
 # 収集対象セット
