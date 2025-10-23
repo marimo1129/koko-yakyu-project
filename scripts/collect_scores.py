@@ -15,6 +15,9 @@ from typing import List, Dict, Tuple, Optional
 import requests
 from bs4 import BeautifulSoup
 from datetime import datetime
+import asyncio
+from playwright.async_api import async_playwright
+
 # ====== ヘッダ（User-Agent）設定（既存のUA定義をこれに置き換える） ======
 # ====== 先頭付近に追加 ======
 UA = {
