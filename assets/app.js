@@ -108,7 +108,7 @@ document.addEventListener('DOMContentLoaded',()=>{
 
   async function renderAlumni(){
     // PapaParseで確実に読む（BOM・改行・カンマ全部ケア）
-    const res = await fetch('./data/players.csv');
+    const res = await fetch('../data/players.csv');
     const txt = await res.text();
     const data = Papa.parse(txt, { header: true, skipEmptyLines: true }).data
       .filter(r => (r.player_name || '').trim());
