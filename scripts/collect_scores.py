@@ -41,6 +41,21 @@ OUT_SUMMARY = "data/tournament_summary.csv"
 UA = {"User-Agent": f"koko-yakyu-project-bot/{YEAR}"}
 SLEEP_SEC = 0.7  # アクセス間隔（優しめ）
 
+async def _fetch_next_data_with_browser(url: str) -> str:
+    """
+    Playwright(Chromium)でページを開き、#__NEXT_DATA__ の JSON文字列を取得
+    """
+    async with async_playwright() as p:
+        browser = await p.chromium.launch(headless=True)
+        ctx = await browser.new_context(user_agent=UA["User-Agent"], locale="ja-JP")
+        page = await ctx.new_page()
+        await page.goto(url, wait_until="networkidle", timeout=60000)
+        # __NEXT_DATA__ のテキストを読む
+        handle = await page.query_selector("script#__NEXT_DATA__")
+        json_text = await handle.inner_text() if handle else ""
+        await browser.close()
+        return json_text or ""
+
 # ----------------
 # 収集対象セット
 #   秋季/春季（各都道府県）
