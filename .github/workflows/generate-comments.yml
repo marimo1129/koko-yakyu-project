@@ -28,14 +28,20 @@ jobs:
 
       # 修正：作業ディレクトリを明示し、python3 で実行
       - name: Run generator
-        working-directory: ${{ github.workspace }}
         run: |
-          python3 ./scripts/generate_comments.py
-
-      - name: Commit & push if changed
-        run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add data/players.csv || true
-          git commit -m "chore: update players.csv (comment_ai auto-generated)" || echo "No changes"
-          git push
+          set -e
+          if [ -f scripts/generate_comments.py ]; then
+            echo "Found: scripts/generate_comments.py"
+            python3 scripts/generate_comments.py
+          elif [ -f generate_comments.py ]; then
+            echo "Found: ./generate_comments.py"
+            python3 generate_comments.py
+          else
+            echo "ERROR: generate_comments.py not found in repo root nor scripts/"
+            echo "PWD: $(pwd)"
+            echo "ls -la:"
+            ls -la
+            echo "ls -la scripts (if exists):"
+            ls -la scripts || true
+            exit 1
+          fi
