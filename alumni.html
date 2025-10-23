@@ -25,5 +25,38 @@
     <button class="icon-btn" onclick="goBack()">← 戻る</button>
     <button class="icon-btn" onclick="goHome()">🏠 ホーム</button>
   </footer>
+  <script>
+(async () => {
+  try {
+    const res = await fetch('./data/players.csv');
+    if (!res.ok) throw new Error('players.csv が読み込めませんでした (' + res.status + ')');
+    const txt = await res.text();
+
+    const rows = Papa.parse(txt, { header: true, skipEmptyLines: true }).data;
+    const data = rows.filter(r => (r.player_name || '').trim());
+
+    const list = document.querySelector('#alumniList');
+    list.innerHTML = '';
+    if (data.length === 0) {
+      list.innerHTML = '<p class="muted">表示できる卒業生データが見つかりませんでした。</p>';
+      return;
+    }
+
+    data.forEach(r => {
+      const node = document.createElement('article');
+      node.className = 'card';
+      node.innerHTML = `
+        <div class="content">
+          <h3 class="title">${r.player_name || '—'}（${r.grade || ''}年・${r.position || ''}）</h3>
+          <p class="meta">${r.team_name || '—'}（${r.prefecture || ''}）</p>
+          <p class="meta2">卒業年: ${r.graduation_year || '—'}｜進路: ${(r.dest_type||'—')}${r.dest_name ? '・'+r.dest_name : ''}</p>
+          ${ (r.comment && r.comment.trim()) ? `<p class="muted" style="margin-top:6px">${r.comment}</p>` : `` }
+        </div>
+      `;
+
+      if ((r.youtube_url || '').trim()) {
+        const id = (function(s){
+          c
+
 </body>
 </html>
