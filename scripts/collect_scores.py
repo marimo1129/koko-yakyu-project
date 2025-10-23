@@ -44,15 +44,38 @@ SLEEP_SEC = 0.7  # アクセス間隔（優しめ）
 async def _fetch_next_data_with_browser(url: str) -> str:
     """
     Playwright(Chromium)でページを開き、#__NEXT_DATA__ の JSON文字列を取得
+    - networkidle ではなく domcontentloaded で遷移完了扱いにする
+    - 明示的に __NEXT_DATA__ の出現を待つ
+    - GH Actions で安定するよう no-sandbox 等を付与
     """
+    from playwright.async_api import async_playwright
+
     async with async_playwright() as p:
-        browser = await p.chromium.launch(headless=True)
-        ctx = await browser.new_context(user_agent=UA["User-Agent"], locale="ja-JP")
+        browser = await p.chromium.launch(
+            headless=True,
+            args=["--no-sandbox", "--disable-setuid-sandbox"]
+        )
+        ctx = await browser.new_context(
+            user_agent=UA.get("User-Agent"),
+            locale="ja-JP",
+            extra_http_headers=UA,  # Accept 等も反映
+        )
         page = await ctx.new_page()
-        await page.goto(url, wait_until="networkidle", timeout=60000)
-        # __NEXT_DATA__ のテキストを読む
-        handle = await page.query_selector("script#__NEXT_DATA__")
-        json_text = await handle.inner_text() if handle else ""
+
+        # domcontentloaded まで待つ（networkidle は避ける）
+        await page.goto(url, wait_until="domcontentloaded", timeout=60000)
+
+        # __NEXT_DATA__ が出るまで待機（最大45秒）
+        try:
+            await page.wait_for_selector("script#__NEXT_DATA__", timeout=45000)
+            handle = await page.query_selector("script#__NEXT_DATA__")
+            json_text = await handle.inner_text() if handle else ""
+        except Exception:
+            # 最後の手段：直接JSで読み取り
+            json_text = await page.evaluate(
+                """() => (document.getElementById('__NEXT_DATA__') || {} ).textContent || """""
+            )
+
         await browser.close()
         return json_text or ""
 
