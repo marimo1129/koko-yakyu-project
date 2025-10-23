@@ -110,30 +110,30 @@ def int_or_none(s: Optional[str]) -> Optional[int]:
 # ================================
 import json
 
+# 先頭付近：reは既にimport済み。追加は不要。
+# import json は不要です（文字列からURLを正規表現で抽出します）
+
 def parse_listing_page(tournament_id: int) -> List[str]:
     """
-    大会トップから各試合詳細ページURLの一覧を取得（APIベース）
+    大会トップの HTML 内に埋め込まれた Next.js の __NEXT_DATA__ から
+    試合ページURL（/match/{id}/）を抜き出す
+    例: https://vk.sportsbull.jp/koshien/game/{YEAR}/{tournament_id}/
     """
-    api_url = f"{BASE}/api/v1/koshien/game/{YEAR}/{tournament_id}"
-    try:
-        res = requests.get(api_url, headers=UA, timeout=20)
-        res.raise_for_status()
-        data = res.json()
-    except Exception as e:
-        print(f"[ERROR] API fetch failed for {api_url}: {e}")
+    url = f"{BASE}/koshien/game/{YEAR}/{tournament_id}/"
+    soup = get_soup(url)
+
+    # __NEXT_DATA__ スクリプトを取得
+    script = soup.select_one("script#__NEXT_DATA__")
+    if not script or not script.string:
+        print(f"[WARN] No __NEXT_DATA__ on page: {url}")
         return []
 
-    links = []
-    # JSONの構造により 'games' 配列内に match_id が格納されている
-    if isinstance(data, dict) and "games" in data:
-        for g in data["games"]:
-            if "id" in g:
-                mid = g["id"]
-                links.append(f"{BASE}/koshien/game/{YEAR}/{tournament_id}/match/{mid}/")
-    else:
-        print(f"[WARN] Unexpected JSON structure for tid={tournament_id}")
+    # JSONを深く辿るより、文字列中の match URL を正規表現で直抜きする
+    text = script.string
+    pat = re.compile(rf"/koshien/game/{YEAR}/{tournament_id}/match/\d+/")
+    links = sorted({(BASE + m.group(0)) for m in pat.finditer(text)})
 
-    print(f"[DEBUG] listing_page (API) {api_url} -> {len(links)} links")
+    print(f"[DEBUG] listing_page (NEXT_DATA) {url} -> {len(links)} links")
     return links
 
 def parse_listing_page(tournament_id: int) -> List[str]:
