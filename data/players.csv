@@ -1,3 +1,3 @@
 player_id,player_name,grade,position,team_id,team_name,prefecture,region,is_alumni,graduation_year,dest_type,dest_name,youtube_url,comment
-p-hyogo-001,田中太郎,2,投手,t-兵庫-報徳学園,報徳学園,兵庫,近畿,false,,,,"https://www.youtube.com/watch?v=xxxx",
-p-osaka-002,山本健,1,外野手,t-大阪-大阪桐蔭,大阪桐蔭,大阪,近畿,false,,,,,
+p-hyogo-001,田中太郎,2,投手,t-兵庫-報徳学園,報徳学園,兵庫,近畿,false,,,,https://www.youtube.com/watch?v=xxxx,田中太郎は投手。報徳学園・兵庫所属で、安定感のあるプレーを見せる。2在籍で今後の成長にも期待がかかる。
+p-osaka-002,山本健,1,外野手,t-大阪-大阪桐蔭,大阪桐蔭,大阪,近畿,false,,,,,山本健は外野手。大阪桐蔭・大阪所属で、安定感のあるプレーを見せる。1在籍で今後の成長にも期待がかかる。
