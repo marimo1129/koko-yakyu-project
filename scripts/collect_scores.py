@@ -15,6 +15,18 @@ from typing import List, Dict, Tuple, Optional
 import requests
 from bs4 import BeautifulSoup
 from datetime import datetime
+# ====== ヘッダ（User-Agent）設定（既存のUA定義をこれに置き換える） ======
+# ====== 先頭付近に追加 ======
+UA = {
+    "User-Agent": (
+        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+        "AppleWebKit/537.36 (KHTML, like Gecko) "
+        "Chrome/120.0.0.0 Safari/537.36"
+    ),
+    "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8",
+    "Accept-Language": "ja,en-US;q=0.9,en;q=0.8",
+    "Connection": "keep-alive",
+}
 
 # ================================
 # 設定
@@ -91,8 +103,18 @@ class SummaryRow:
 SCORE_RE = re.compile(r"(\d+)\s*[-－–]\s*(\d+)")
 
 def get_soup(url: str) -> BeautifulSoup:
-    r = requests.get(url, headers=UA, timeout=30)
-    r.raise_for_status()
+    """
+    requestsでページを取得し、BeautifulSoupを返す。
+    ブラウザ風ヘッダを付与してBot対策を回避。
+    """
+    try:
+        r = requests.get(url, headers=UA, timeout=30)
+        r.raise_for_status()
+    except Exception as e:
+        print(f"[ERROR] failed to GET {url}: {e}")
+        return BeautifulSoup("", "html.parser")
+
+    r.encoding = r.apparent_encoding
     return BeautifulSoup(r.text, "html.parser")
 
 def norm(text: str) -> str:
