@@ -1,14 +1,14 @@
-name: Auto Generate AI comments for players.csv
+name: Generate AI comments for players.csv
 
 on:
-  schedule:
-    # 毎日午前3時（日本時間）に自動実行
-    - cron: '0 18 * * 1'
   workflow_dispatch:
   push:
     paths:
       - "data/players.csv"
       - "scripts/generate_comments.py"
+  schedule:
+    # JST 03:00（UTC 18:00）
+    - cron: "0 18 * * *"
 
 permissions:
   contents: write
@@ -16,21 +16,45 @@ permissions:
 jobs:
   build:
     runs-on: ubuntu-latest
-
     steps:
       - uses: actions/checkout@v4
+
       - uses: actions/setup-python@v5
         with:
           python-version: "3.11"
 
-      - name: Run generator
+      # あると便利：ワークスペースを出力（パス問題の即判定）
+      - name: Show workspace
         run: |
-          python scripts/generate_comments.py
+          pwd
+          echo "::group::ls -la"
+          ls -la
+          echo "::endgroup::"
+          echo "::group::ls -la scripts"
+          ls -la scripts || true
+          echo "::endgroup::"
 
+      # ← ここが肝。存在する場所に合わせて実行する
+      - name: Run generator
+        shell: bash
+        run: |
+          set -eu
+          FILE=""
+          if [ -f scripts/generate_comments.py ]; then
+            FILE="scripts/generate_comments.py"
+          elif [ -f generate_comments.py ]; then
+            FILE="generate_comments.py"
+          else
+            echo "::error::generate_comments.py が見つかりません"
+            exit 1
+          fi
+          python "$FILE"
+
+      # 変更があればコミット
       - name: Commit & push if changed
         run: |
-          git config user.name "github-actions[bot]"
+          git config user.name  "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add data/players.csv || true
-          git commit -m "auto: update players.csv with AI comments" || echo "no changes"
+          git commit -m "chore: update players.csv (comment_ai auto-generated)" || echo "No changes"
           git push
