@@ -1,0 +1,35 @@
+name: collect-scores
+
+on:
+  workflow_dispatch:        # 手動実行
+  schedule:
+    - cron: "0 9 * * 5"     # 毎週金曜 09:00 UTC = 18:00 JST
+
+permissions:
+  contents: write           # 収集後にCSVをコミットするために必要
+
+jobs:
+  run:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install deps
+        run: pip install requests beautifulsoup4
+
+      - name: Collect scores
+        run: python scripts/collect_scores.py
+
+      - name: Commit & push CSV
+        run: |
+          git config user.name "koko-yakyu-bot"
+          git config user.email "bot@example.com"
+          git add data/matches.csv data/tournament_summary.csv
+          git commit -m "Update matches & summaries ($(date -u +'%Y-%m-%dT%H:%M:%SZ'))" || echo "no changes"
+          git push
