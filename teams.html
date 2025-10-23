@@ -1,0 +1,60 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>チーム一覧（県大会＋エリア大会）</title>
+  <link rel="stylesheet" href="./assets/styles.css" />
+  <script defer src="./assets/app.js"></script>
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand" onclick="goHome()">高校野球データポータル</div>
+    <nav class="actions">
+      <button class="btn ghost" onclick="goBack()">← 戻る</button>
+      <a class="btn" href="./index.html">🏠 ホーム</a>
+    </nav>
+  </header>
+
+  <main class="container">
+    <nav class="breadcrumbs">
+      <a href="./index.html">ホーム</a><span>›</span><span>チーム一覧</span>
+    </nav>
+
+    <h1>チーム一覧（県大会＋エリア大会）</h1>
+
+    <section class="toolbar">
+      <input id="tq" class="input" placeholder="高校名・県名・備考で検索" />
+      <select id="tregion" class="select"><option value="">地域</option></select>
+      <select id="tpref" class="select"><option value="">都道府県</option></select>
+      <select id="tsort" class="select">
+        <option value="-prefectural_rank">並び：県大会（上位→下位）</option>
+        <option value="-area_rank">並び：エリア大会（上位→下位）</option>
+        <option value="team_name">高校名（五十音）</option>
+        <option value="prefecture">都道府県（五十音）</option>
+      </select>
+    </section>
+
+    <section class="toolbar secondary">
+      <div id="tcount" class="muted"></div>
+      <div class="spacer"></div>
+      <button class="btn ghost" onclick="resetTeamsFilters()">フィルタをクリア</button>
+    </section>
+
+    <section id="teamList" class="grid"></section>
+  </main>
+
+  <footer class="footer">
+    <button class="icon-btn" onclick="goBack()">← 戻る</button>
+    <button class="icon-btn" onclick="goHome()">🏠 ホーム</button>
+  </footer>
+
+  <template id="teamCardTpl">
+    <article class="card">
+      <h3 class="title"></h3>
+      <p class="meta"></p>
+      <p class="meta2 muted"></p>
+    </article>
+  </template>
+</body>
+</html>
