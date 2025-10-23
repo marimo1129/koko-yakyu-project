@@ -100,4 +100,49 @@ document.addEventListener('DOMContentLoaded',()=>{
   }
 
   render();
+  // ===== 卒業生一覧 初期化 =====
+if (location.pathname.endsWith('alumni.html')) {
+  async function renderAlumni() {
+    const res = await fetch('data/players.csv');
+    const txt = await res.text();
+    const rows = Papa.parse(txt, { header: true }).data.filter(r => r.player_name);
+
+    const list = document.querySelector('#list');
+    list.innerHTML = '';
+
+    rows.forEach(r => {
+      const node = document.createElement('div');
+      node.className = 'card';
+      node.innerHTML = `
+        <div class="content">
+          <h3 class="title">${r.player_name}（${r.grade || ''}年・${r.position || ''}）</h3>
+          <p class="meta">所属：${r.team_name || ''}（${r.prefecture || ''}）</p>
+          <p class="meta2">卒業年: ${r.graduation_year || '—'}｜進路: ${(r.dest_type||'—')} ${r.dest_name? '・'+r.dest_name: ''}</p>
+        </div>
+      `;
+
+      // コメントがあれば追加
+      if (r.comment) {
+        const pc = document.createElement('p');
+        pc.className = 'muted';
+        pc.textContent = r.comment;
+        node.querySelector('.content').appendChild(pc);
+      }
+
+      // YouTubeがあれば埋め込み
+      if (r.youtube_url) {
+        const iframe = document.createElement('iframe');
+        iframe.src = r.youtube_url.replace('watch?v=', 'embed/');
+        iframe.width = "320";
+        iframe.height = "180";
+        iframe.allowFullscreen = true;
+        iframe.loading = "lazy";
+        node.querySelector('.content').appendChild(iframe);
+      }
+
+      list.appendChild(node);
+    });
+  }
+  renderAlumni();
+}
 })();
