@@ -14,10 +14,11 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.11"
-      - name: Move to script directory and run
+
+      - name: Run generator
         run: |
-          cd scripts
-          python generate_comments.py
+          python scripts/generate_comments.py
+
       - name: Commit & push if changed
         run: |
           git config user.name "github-actions[bot]"
