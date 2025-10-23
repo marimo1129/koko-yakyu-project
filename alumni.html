@@ -108,5 +108,124 @@
     }
   })();
   </script>
+  <!-- ======== 強制診断つき 卒業生描画スクリプト ======== -->
+<script>
+(async () => {
+  // 画面上に診断ログを出す小さい領域
+  const logBox = document.createElement('pre');
+  logBox.style.background = '#111';
+  logBox.style.color = '#9aa4af';
+  logBox.style.padding = '8px 12px';
+  logBox.style.border = '1px solid #333';
+  logBox.style.borderRadius = '8px';
+  logBox.style.maxWidth = '960px';
+  logBox.style.margin = '12px auto';
+  logBox.style.fontSize = '12px';
+  logBox.style.whiteSpace = 'pre-wrap';
+  logBox.textContent = '診断ログ:\n';
+  document.querySelector('main.container').insertBefore(logBox, document.querySelector('#alumniList'));
+
+  const log = (...args) => { logBox.textContent += args.join(' ') + '\n'; console.log(...args); };
+
+  try {
+    // 3候補のパスを順番に試す（キャッシュバスター付き）
+    const candidates = [
+      './data/players.csv',
+      '../data/players.csv',
+      '/koko-yakyu-project/data/players.csv'
+    ];
+
+    let csvText = null;
+    let usedPath = null;
+
+    for (const base of candidates) {
+      const url = base + (base.includes('?') ? '&' : '?') + 'v=' + Date.now();
+      log('TRY:', url);
+      try {
+        const res = await fetch(url, { cache: 'no-store' });
+        log('  status =', res.status, res.statusText);
+        if (res.ok) {
+          const txt = await res.text();
+          log('  text(0..120)=', txt.slice(0, 120).replace(/\n/g, '\\n'));
+          csvText = txt;
+          usedPath = base;
+          break;
+        }
+      } catch (e) {
+        log('  fetch error:', e.message);
+      }
+    }
+
+    if (!csvText) {
+      throw new Error('CSVを取得できませんでした（3候補すべて失敗）');
+    }
+
+    log('USED PATH:', usedPath);
+
+    // PapaParse でパース
+    let parsed;
+    try {
+      parsed = Papa.parse(csvText, { header: true, skipEmptyLines: true });
+    } catch (e) {
+      log('Papa.parse error:', e.message);
+      throw e;
+    }
+
+    if (parsed.errors && parsed.errors.length) {
+      log('Papa errors (先頭1件):', JSON.stringify(parsed.errors[0]));
+    }
+
+    const rows = Array.isArray(parsed.data) ? parsed.data : [];
+    log('rows.length =', rows.length);
+    const data = rows.filter(r => (r.player_name || '').trim());
+    log('displayable =', data.length);
+
+    const list = document.querySelector('#alumniList');
+    list.innerHTML = '';
+
+    if (data.length === 0) {
+      list.innerHTML = '<p class="muted">表示できる卒業生データがありません（players.csv のヘッダ名と値を確認）。</p>';
+      return;
+    }
+
+    // カード描画
+    data.forEach(r => {
+      const card = document.createElement('article');
+      card.className = 'card';
+      card.innerHTML = `
+        <div class="content">
+          <h3 class="title">${r.player_name || '—'}（${r.grade || ''}年・${r.position || ''}）</h3>
+          <p class="meta">${r.team_name || '—'}（${r.prefecture || ''}）</p>
+          <p class="meta2">卒業年: ${r.graduation_year || '—'}｜進路: ${(r.dest_type||'—')}${r.dest_name ? '・'+r.dest_name : ''}</p>
+          ${(r.comment && r.comment.trim()) ? `<p class="muted" style="margin-top:6px">${r.comment}</p>` : ``}
+        </div>
+      `;
+
+      // YouTube埋め込み
+      const url = (r.youtube_url || '').trim();
+      if (url) {
+        const m = url.match(/[?&]v=([\w-]{6,})|youtu\.be\/([\w-]{6,})|\/embed\/([\w-]{6,})/);
+        const vid = m ? (m[1] || m[2] || m[3]) : '';
+        if (vid) {
+          const wrap = document.createElement('div');
+          wrap.className = 'embed';
+          wrap.innerHTML = `<iframe src="https://www.youtube.com/embed/${vid}" title="YouTube" frameborder="0" allowfullscreen loading="lazy"></iframe>`;
+          card.querySelector('.content').appendChild(wrap);
+        }
+      }
+
+      list.appendChild(card);
+    });
+
+    log('RENDERED:', data.length, 'cards');
+  } catch (e) {
+    const list = document.querySelector('#alumniList');
+    list.innerHTML = `<p class="muted">エラー：${e.message}</p>`;
+    log('FATAL:', e.message);
+  }
+})();
+</script>
+<!-- ======== /診断つきスクリプト ======== -->
+
 </body>
 </html>
