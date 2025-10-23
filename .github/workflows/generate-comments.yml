@@ -1,7 +1,14 @@
-name: Generate AI comments for players.csv
+name: Auto Generate AI comments for players.csv
 
 on:
+  schedule:
+    # 毎日午前3時（日本時間）に自動実行
+    - cron: '0 18 * * 1'
   workflow_dispatch:
+  push:
+    paths:
+      - "data/players.csv"
+      - "scripts/generate_comments.py"
 
 permissions:
   contents: write
@@ -9,39 +16,21 @@ permissions:
 jobs:
   build:
     runs-on: ubuntu-latest
+
     steps:
       - uses: actions/checkout@v4
-
       - uses: actions/setup-python@v5
         with:
           python-version: "3.11"
 
-      # 追加：ワークスペースの中身を確認（デバッグ）
-      - name: Show workspace
-        run: |
-          echo "PWD:"
-          pwd
-          echo "Root ls:"
-          ls -la
-          echo "scripts ls:"
-          ls -la scripts || true
-
-      # 修正：作業ディレクトリを明示し、python3 で実行
       - name: Run generator
         run: |
-          set -e
-          if [ -f scripts/generate_comments.py ]; then
-            echo "Found: scripts/generate_comments.py"
-            python3 scripts/generate_comments.py
-          elif [ -f generate_comments.py ]; then
-            echo "Found: ./generate_comments.py"
-            python3 generate_comments.py
-          else
-            echo "ERROR: generate_comments.py not found in repo root nor scripts/"
-            echo "PWD: $(pwd)"
-            echo "ls -la:"
-            ls -la
-            echo "ls -la scripts (if exists):"
-            ls -la scripts || true
-            exit 1
-          fi
+          python scripts/generate_comments.py
+
+      - name: Commit & push if changed
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add data/players.csv || true
+          git commit -m "auto: update players.csv with AI comments" || echo "no changes"
+          git push
