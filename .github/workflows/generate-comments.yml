@@ -11,13 +11,26 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+
       - uses: actions/setup-python@v5
         with:
           python-version: "3.11"
 
-      - name: Run generator
+      # 追加：ワークスペースの中身を確認（デバッグ）
+      - name: Show workspace
         run: |
-          python scripts/generate_comments.py
+          echo "PWD:"
+          pwd
+          echo "Root ls:"
+          ls -la
+          echo "scripts ls:"
+          ls -la scripts || true
+
+      # 修正：作業ディレクトリを明示し、python3 で実行
+      - name: Run generator
+        working-directory: ${{ github.workspace }}
+        run: |
+          python3 ./scripts/generate_comments.py
 
       - name: Commit & push if changed
         run: |
