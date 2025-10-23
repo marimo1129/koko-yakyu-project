@@ -14,12 +14,14 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.11"
-      - name: Run generator
-        run: python scripts/generate_comments.py
+      - name: Move to script directory and run
+        run: |
+          cd scripts
+          python generate_comments.py
       - name: Commit & push if changed
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add data/players.csv
+          git add data/players.csv || true
           git commit -m "chore: update players.csv (comment_ai auto-generated)" || echo "No changes"
           git push
