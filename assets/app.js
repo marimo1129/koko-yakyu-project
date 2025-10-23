@@ -150,3 +150,78 @@ document.addEventListener('DOMContentLoaded',()=>{
 
   renderAlumni();
 })();
+// ==============================
+// 試合結果（大会別スコア表示用）
+// ==============================
+(function initMatchesPage() {
+  async function loadCSV(path) {
+    const res = await fetch(path);
+    const text = await res.text();
+    const [header, ...rows] = text.trim().split(/\r?\n/);
+    const cols = header.split(",");
+    return rows.map(r => {
+      const vals = r.split(/,(?=(?:[^"]*"[^"]*")*[^"]*$)/);
+      const obj = {};
+      cols.forEach((c, i) => (obj[c] = vals[i]?.replace(/^"|"$/g, "")));
+      return obj;
+    });
+  }
+
+  async function renderMatches() {
+    const matches = await loadCSV("data/matches.csv");
+    const byTournament = {};
+
+    for (const m of matches) {
+      (byTournament[m.tournament] ||= []).push(m);
+    }
+
+    const root = document.querySelector("#app");
+    if (!root) return;
+    root.innerHTML = "";
+
+    for (const [tname, rows] of Object.entries(byTournament)) {
+      const sec = document.createElement("section");
+      sec.innerHTML = `<h2 class="title">${tname}（${rows[0]?.year ?? ""}）</h2>`;
+
+      const byPref = {};
+      for (const r of rows) {
+        const key = r.prefecture || "（全国）";
+        (byPref[key] ||= []).push(r);
+      }
+
+      for (const [pref, rlist] of Object.entries(byPref)) {
+        const box = document.createElement("div");
+        box.innerHTML = `<h3>${pref}</h3>`;
+        const tbl = document.createElement("table");
+        tbl.className = "table";
+        tbl.innerHTML = `
+          <thead><tr>
+            <th>日付</th><th>ステージ</th><th>対戦</th><th>スコア</th><th>勝者</th>
+          </tr></thead><tbody></tbody>`;
+        const tb = tbl.querySelector("tbody");
+
+        rlist.sort((a, b) => (a.date || "").localeCompare(b.date || ""));
+        for (const r of rlist) {
+          const tr = document.createElement("tr");
+          const score = r.score_a && r.score_b ? `${r.score_a}-${r.score_b}` : "";
+          tr.innerHTML = `
+            <td>${r.date || ""}</td>
+            <td>${r.stage || ""}</td>
+            <td><a href="${r.source_url}" target="_blank" rel="noopener">${r.team_a} vs ${r.team_b}</a></td>
+            <td>${score}</td>
+            <td>${r.winner || ""}</td>`;
+          tb.appendChild(tr);
+        }
+
+        box.appendChild(tbl);
+        sec.appendChild(box);
+      }
+      root.appendChild(sec);
+    }
+  }
+
+  // index.html / teams.html のどちらかで自動発火
+  if (document.querySelector("#app")) {
+    renderMatches();
+  }
+})();
