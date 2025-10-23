@@ -108,31 +108,33 @@ def int_or_none(s: Optional[str]) -> Optional[int]:
 # 解析（サイトのマークアップは変わる可能性あり）
 # セレクタは後で微調整しやすいよう一箇所に寄せています。
 # ================================
+import json
+
 def parse_listing_page(tournament_id: int) -> List[str]:
     """
-    大会トップから各試合詳細ページURLの一覧を返す
-    例: https://vk.sportsbull.jp/koshien/game/{YEAR}/{tournament_id}/
+    大会トップから各試合詳細ページURLの一覧を取得（APIベース）
     """
-    url = f"{BASE}/koshien/game/{YEAR}/{tournament_id}/"
-    soup = get_soup(url)
+    api_url = f"{BASE}/api/v1/koshien/game/{YEAR}/{tournament_id}"
+    try:
+        res = requests.get(api_url, headers=UA, timeout=20)
+        res.raise_for_status()
+        data = res.json()
+    except Exception as e:
+        print(f"[ERROR] API fetch failed for {api_url}: {e}")
+        return []
 
-    # ★重要: 下記セレクタは構造に合わせて調整してください
     links = []
-    for a in soup.select("a[href*='/koshien/game/'][href*='/detail/']"):
-        href = a.get("href", "")
-        if href.startswith("/"):
-            href = BASE + href
-        if f"/koshien/game/{YEAR}/" in href:
-            links.append(href)
-    # 代替（カード内リンクから集める）
-    if not links:
-        for a in soup.select("a[href*='/koshien/game/']"):
-            href = a.get("href", "")
-            if "/detail/" in href:
-                if href.startswith("/"):
-                    href = BASE + href
-                links.append(href)
-    return sorted(set(links))
+    # JSONの構造により 'games' 配列内に match_id が格納されている
+    if isinstance(data, dict) and "games" in data:
+        for g in data["games"]:
+            if "id" in g:
+                mid = g["id"]
+                links.append(f"{BASE}/koshien/game/{YEAR}/{tournament_id}/match/{mid}/")
+    else:
+        print(f"[WARN] Unexpected JSON structure for tid={tournament_id}")
+
+    print(f"[DEBUG] listing_page (API) {api_url} -> {len(links)} links")
+    return links
 
 def parse_listing_page(tournament_id: int) -> List[str]:
     """
