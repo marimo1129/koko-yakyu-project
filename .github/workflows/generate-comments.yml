@@ -1,30 +1,33 @@
-name: Generate player comments
+name: Generate AI comments for players.csv
 
 on:
   workflow_dispatch:
-  push:
-    paths:
-      - "data/players.csv"
-      - "generate_comments.py"
-
-permissions:
-  contents: write
 
 jobs:
-  build:
+  generate:
     runs-on: ubuntu-latest
+
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
         with:
-          python-version: "3.11"
-      - name: Run generator
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: pip install openai
+
+      - name: Run AI comment generator
+        env:
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+        run: python scripts/generate_comments.py
+
+      - name: Commit and push changes
         run: |
-          python generate_comments.py --in data/players.csv --out data/players.csv --overwrite
-      - name: Commit updated players.csv
-        run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git config --global user.name "github-actions"
+          git config --global user.email "actions@github.com"
           git add data/players.csv
-          git commit -m "auto: add/update comments" || echo "no changes"
+          git commit -m "Add AI comments to players.csv" || echo "No changes"
           git push
