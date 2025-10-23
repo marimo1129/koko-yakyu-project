@@ -1,0 +1,38 @@
+name: Build teams.csv from prefectural & area results
+
+on:
+  workflow_dispatch:    # 手動で「Run workflow」できる
+  push:
+    paths:
+      - "data/prefectural_best8.csv"
+      - "data/area_results.csv"
+      - "data/areas.csv"
+      - "scripts/merge_teams.py"
+
+permissions:
+  contents: write       # 生成した teams.csv をコミットする権限
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Merge to teams.csv
+        run: |
+          python scripts/merge_teams.py
+          test -f data/teams.csv && echo "OK: teams.csv generated"
+
+      - name: Commit teams.csv
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add data/teams.csv
+          git commit -m "auto: update data/teams.csv" || echo "no changes to commit"
+          git push
