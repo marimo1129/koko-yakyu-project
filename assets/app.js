@@ -107,36 +107,29 @@ document.addEventListener('DOMContentLoaded',()=>{
   if (!location.pathname.includes('alumni.html')) return;
 
   async function renderAlumni(){
-    // Papaは使わず、既存の fetchCSV を使う
-    const rows = await fetchCSV('./data/players.csv');
-    const data = rows.filter(r => (r.player_name || '').trim());
+    // PapaParseで確実に読む（BOM・改行・カンマ全部ケア）
+    const res = await fetch('./data/players.csv');
+    const txt = await res.text();
+    const data = Papa.parse(txt, { header: true, skipEmptyLines: true }).data
+      .filter(r => (r.player_name || '').trim());
 
-    const list = document.querySelector('#alumniList'); // ← HTMLのIDに合わせる
+    const list = document.querySelector('#alumniList'); // ← HTMLのIDと一致
     list.innerHTML = '';
 
     data.forEach(r => {
       const node = document.createElement('article');
       node.className = 'card';
-     node.innerHTML = `
-  <div class="content">
-    <h3 class="title">${r.player_name || '—'}（${r.grade || ''}年・${r.position || ''}）</h3>
-    <p class="meta">${r.team_name || '—'}（${r.prefecture || ''}）</p>
-    <p class="meta2">卒業年: ${r.graduation_year || '—'}｜進路: ${(r.dest_type||'—')}${r.dest_name ? '・'+r.dest_name : ''}</p>
-    ${ (r.comment && r.comment.trim()) ? `<p class="muted" style="margin-top:6px">${r.comment}</p>` : `` }
-  </div>
-`;
+      node.innerHTML = `
+        <div class="content">
+          <h3 class="title">${r.player_name || '—'}（${r.grade || ''}年・${r.position || ''}）</h3>
+          <p class="meta">${r.team_name || '—'}（${r.prefecture || ''}）</p>
+          <p class="meta2">卒業年: ${r.graduation_year || '—'}｜進路: ${(r.dest_type||'—')}${r.dest_name ? '・'+r.dest_name : ''}</p>
+          ${ (r.comment && r.comment.trim())
+              ? `<p class="muted" style="margin-top:6px">${r.comment}</p>` : `` }
+        </div>
+      `;
 
-
-      // コメント
-      if ((r.comment || '').trim()){
-        const pc = document.createElement('p');
-        pc.className = 'muted';
-        pc.style.marginTop = '6px';
-        pc.textContent = r.comment;
-        node.querySelector('.content').appendChild(pc);
-      }
-
-      // YouTube（どのURL形式でもOKに）
+      // YouTube（watch?v= / youtu.be / embed すべてOK）
       if ((r.youtube_url || '').trim()){
         const id = (function(url){
           const s = String(url);
