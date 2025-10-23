@@ -167,3 +167,5 @@ def parse_listing_page(tournament_id: int) -> List[str]:
 
     print(f"[DEBUG] listing_page {url} -> {len(links)} links")
     return sorted(links)
+if __name__ == "__main__":
+    main()
