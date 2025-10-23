@@ -15,3 +15,89 @@ document.addEventListener('DOMContentLoaded',()=>{
     list.appendChild(div);
   });
 });
+// ===== チーム一覧 初期化 =====
+(async function initTeams(){
+  if (!location.pathname.endsWith('teams.html')) return;
+
+  const teams = await fetchCSV('./data/teams.csv');
+
+  // ランクを数値化（並び替え用）
+  const rankScore = (v) => {
+    const m = String(v||'').trim();
+    if (m === '優勝') return 4;
+    if (m === '準優勝') return 3;
+    if (m === 'ベスト4') return 2;
+    if (m === 'ベスト8') return 1;
+    return 0;
+  };
+  teams.forEach(t=>{
+    t.prefectural_rank = rankScore(t.prefectural_result);
+    t.area_rank = rankScore(t.area_result);
+  });
+
+  const $q = qs('#tq');
+  const $r = qs('#tregion');
+  const $p = qs('#tpref');
+  const $s = qs('#tsort');
+  const $list = qs('#teamList');
+  const $cnt = qs('#tcount');
+
+  const regions = uniq(teams.map(t=>t.region).filter(Boolean)).sort();
+  const prefs   = uniq(teams.map(t=>t.prefecture).filter(Boolean)).sort();
+  fillSelect($r, regions);
+  fillSelect($p, prefs);
+
+  const state = { q:'', region:'', pref:'', sort:'-prefectural_rank' };
+
+  [$q,$r,$p,$s].forEach(el=> el && el.addEventListener('input', ()=>{
+    state.q = $q.value.trim();
+    state.region = $r.value;
+    state.pref = $p.value;
+    state.sort = $s.value;
+    render();
+  }));
+
+  window.resetTeamsFilters = function(){
+    $q.value=''; $r.value=''; $p.value=''; $s.value='-prefectural_rank';
+    state.q=''; state.region=''; state.pref=''; state.sort='-prefectural_rank';
+    render();
+  };
+
+  function render(){
+    let rows = teams.slice();
+
+    // フィルタ
+    if (state.q){
+      const q = state.q.toLowerCase();
+      rows = rows.filter(t=>[
+        t.team_name,t.prefecture,t.region,t.note,t.area,t.area_round,t.prefectural_result,t.area_result
+      ].some(v=> (v||'').toLowerCase().includes(q)));
+    }
+    if (state.region) rows = rows.filter(t=> t.region===state.region);
+    if (state.pref)   rows = rows.filter(t=> t.prefecture===state.pref);
+
+    // 並び替え
+    const key = state.sort.replace('-','');
+    const dir = state.sort.startsWith('-')? -1: 1;
+    rows.sort((a,b)=>{
+      const av = (key==='prefectural_rank' || key==='area_rank') ? Number(a[key]||0) : (a[key]||'');
+      const bv = (key==='prefectural_rank' || key==='area_rank') ? Number(b[key]||0) : (b[key]||'');
+      return av>bv? dir: av<bv? -dir: 0;
+    });
+
+    $cnt.textContent = `${rows.length} 校`;
+
+    $list.innerHTML='';
+    const tpl = qs('#teamCardTpl');
+    rows.forEach(t=>{
+      const node = tpl.content.cloneNode(true);
+      node.querySelector('.title').textContent = `${t.team_name}（${t.prefecture}・${t.region}）`;
+      node.querySelector('.meta').textContent =
+        `県大会: ${t.prefectural_result || '—'} ／ エリア(${t.area||'—'}): ${t.area_result || '—'} ${t.area_round? '・'+t.area_round : ''}`;
+      node.querySelector('.meta2').textContent = t.note || '';
+      $list.appendChild(node);
+    });
+  }
+
+  render();
+})();
