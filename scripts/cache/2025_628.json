@@ -1,0 +1,17 @@
+def parse_listing_page(tournament_id: int) -> List[str]:
+    path = f"scripts/cache/{YEAR}_{tournament_id}.json"
+    if os.path.exists(path):
+        with open(path, "r", encoding="utf-8") as f:
+            data = json.load(f)
+    else:
+        print(f"[WARN] Local cache not found for {path}")
+        return []
+
+    links = []
+    for g in data.get("games", []):
+        if "id" in g:
+            mid = g["id"]
+            links.append(f"{BASE}/koshien/game/{YEAR}/{tournament_id}/match/{mid}/")
+
+    print(f"[DEBUG] listing_page (cache) {path} -> {len(links)} links")
+    return links
