@@ -101,48 +101,57 @@ document.addEventListener('DOMContentLoaded',()=>{
 
   render();
   // ===== 卒業生一覧 初期化 =====
-if (location.pathname.endsWith('alumni.html')) {
-  async function renderAlumni() {
-    const res = await fetch('data/players.csv');
-    const txt = await res.text();
-    const rows = Papa.parse(txt, { header: true }).data.filter(r => r.player_name);
+// ===== 卒業生一覧 初期化（players.csv を表示）=====
+(function initAlumniPage(){
+  // URLのどこかに alumni.html が含まれていれば実行
+  if (!location.pathname.includes('alumni.html')) return;
 
-    const list = document.querySelector('#list');
+  async function renderAlumni(){
+    // Papaは使わず、既存の fetchCSV を使う
+    const rows = await fetchCSV('./data/players.csv');
+    const data = rows.filter(r => (r.player_name || '').trim());
+
+    const list = document.querySelector('#alumniList'); // ← HTMLのIDに合わせる
     list.innerHTML = '';
 
-    rows.forEach(r => {
-      const node = document.createElement('div');
+    data.forEach(r => {
+      const node = document.createElement('article');
       node.className = 'card';
       node.innerHTML = `
         <div class="content">
-          <h3 class="title">${r.player_name}（${r.grade || ''}年・${r.position || ''}）</h3>
-          <p class="meta">所属：${r.team_name || ''}（${r.prefecture || ''}）</p>
-          <p class="meta2">卒業年: ${r.graduation_year || '—'}｜進路: ${(r.dest_type||'—')} ${r.dest_name? '・'+r.dest_name: ''}</p>
+          <h3 class="title">${r.player_name || '—'}（${r.grade || ''}年・${r.position || ''}）</h3>
+          <p class="meta">${r.team_name || '—'}（${r.prefecture || ''}）</p>
+          <p class="meta2">卒業年: ${r.graduation_year || '—'}｜進路: ${(r.dest_type||'—')}${r.dest_name ? '・'+r.dest_name : ''}</p>
         </div>
       `;
 
-      // コメントがあれば追加
-      if (r.comment) {
+      // コメント
+      if ((r.comment || '').trim()){
         const pc = document.createElement('p');
         pc.className = 'muted';
+        pc.style.marginTop = '6px';
         pc.textContent = r.comment;
         node.querySelector('.content').appendChild(pc);
       }
 
-      // YouTubeがあれば埋め込み
-      if (r.youtube_url) {
-        const iframe = document.createElement('iframe');
-        iframe.src = r.youtube_url.replace('watch?v=', 'embed/');
-        iframe.width = "320";
-        iframe.height = "180";
-        iframe.allowFullscreen = true;
-        iframe.loading = "lazy";
-        node.querySelector('.content').appendChild(iframe);
+      // YouTube（どのURL形式でもOKに）
+      if ((r.youtube_url || '').trim()){
+        const id = (function(url){
+          const s = String(url);
+          const m = s.match(/[?&]v=([\w-]{6,})|youtu\.be\/([\w-]{6,})|\/embed\/([\w-]{6,})/);
+          return m ? (m[1] || m[2] || m[3]) : '';
+        })(r.youtube_url);
+        if (id){
+          const wrap = document.createElement('div');
+          wrap.className = 'embed';
+          wrap.innerHTML = `<iframe src="https://www.youtube.com/embed/${id}" title="YouTube video" frameborder="0" allowfullscreen loading="lazy"></iframe>`;
+          node.querySelector('.content').appendChild(wrap);
+        }
       }
 
       list.appendChild(node);
     });
   }
+
   renderAlumni();
-}
 })();
