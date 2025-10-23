@@ -167,5 +167,14 @@ def parse_listing_page(tournament_id: int) -> List[str]:
 
     print(f"[DEBUG] listing_page {url} -> {len(links)} links")
     return sorted(links)
+def main():
+    print("[INFO] Collecting test tournament 628 ...")
+    listing = parse_listing_page(628)
+    print(f"[DEBUG] Found {len(listing)} match URLs:")
+    for url in listing[:5]:
+        print("  ", url)
+    print("[DONE] Test run complete")
+
+
 if __name__ == "__main__":
     main()
