@@ -8,16 +8,37 @@
 - data/hb_tournaments.yml に "autumn_pref" があり、url と name を持つ
 """
 
-import csv
+# scripts/build_best8.py の先頭付近（importの下ぐらい）にある YAML を読む箇所を置き換え
 import os
-import re
-import yaml
-from collections import defaultdict, OrderedDict
+import csv
 from datetime import datetime
+import yaml
+from pathlib import Path
 
-IN_MATCH = "data/matches.csv"
-CONF_YAML = "data/hb_tournaments.yml"
-OUT_CSV  = "data/best8_autumn_{year}.csv"
+CFG_PATH = Path("data/hb_tournaments.yml")
+
+def load_config():
+    if not CFG_PATH.exists():
+        print(f"[WARN] config not found: {CFG_PATH}")
+        return {"year": datetime.now().year, "autumn_pref": []}
+
+    data = yaml.safe_load(CFG_PATH.read_text(encoding="utf-8")) or {}
+    # 年度の決定（Actionsの入力 koko_year があれば優先）
+    year = int(os.getenv("koko_year", data.get("year", datetime.now().year)))
+
+    # キー名の揺れ対策：autumn_pref / autumn_prefs のどちらでも拾う
+    prefs = data.get("autumn_pref")
+    if prefs is None:
+        prefs = data.get("autumn_prefs")  # 旧名・想定名が違っても拾う
+    if prefs is None:
+        prefs = []
+
+    # URL空のものは除外
+    prefs = [p for p in prefs if p and p.get("url")]
+
+    print(f"[DEBUG] year={year} / autumn_pref count={len(prefs)}")
+    return year, prefs
+
 
 def load_autumn_pref_map():
     with open(CONF_YAML, "r", encoding="utf-8") as f:
