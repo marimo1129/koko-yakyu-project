@@ -112,9 +112,14 @@ def collect_pairs_by_score(root: BeautifulSoup) -> list[tuple[str, str]]:
                 return res
             for a in elem.find_all("a"):
                 t = norm(a.get_text())
-                if t and not _ban(t):
-                    res.append(t)
+                if not t or _ban(t):
+                    continue
+                # ★ ここを追加：スコア(3-2, 10-0 など)は候補から除外
+                if re.fullmatch(r"\s*[０-９0-9]+\s*[-\-－–]\s*[０-９0-9]+\s*", t):
+                    continue
+                res.append(t)
             return res
+
 
         # まず同じコンテナ内の a から抽出
         cand = names_in(container)
