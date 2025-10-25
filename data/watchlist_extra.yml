@@ -1,3 +1,2 @@
-# 手で追加したい注目校（例）
-teams:
-  # - { year: 2025, prefecture: "大阪府", team: "大阪桐蔭", source_url: "https://..." }
+# data/watchlist_extra.yml
+teams: []
