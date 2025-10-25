@@ -21,10 +21,7 @@ jobs:
           python-version: "3.11"
 
       - name: Install deps
-        run: pip install requests beautifulsoup4 playwright
-
-      - name: Install browsers for Playwright
-        run: python -m playwright install --with-deps chromium
+        run: pip install requests beautifulsoup4
 
       - name: Collect scores
         run: python scripts/collect_scores.py
