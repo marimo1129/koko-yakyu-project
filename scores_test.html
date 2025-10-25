@@ -1,0 +1,25 @@
+<!doctype html><meta charset="utf-8">
+<h2>2025 注目選手スコア（テスト）</h2>
+<table id="t" border="1" cellpadding="6"><thead><tr>
+<th>学校</th><th>選手</th><th>守備</th><th>スコア</th><th>根拠</th></tr></thead><tbody></tbody></table>
+<script>
+async function run(){
+  const res = await fetch('data/player_scores_2025.csv');
+  if(!res.ok){ document.body.insertAdjacentHTML('beforeend','<p>CSVが見つかりません</p>'); return; }
+  const text = await res.text();
+  const rows = text.split(/\r?\n/).filter(x=>x.trim());
+  const head = rows[0].split(',');
+  const idx = (k)=> head.indexOf(k);
+  const b = document.querySelector('#t tbody');
+  rows.slice(1).forEach(line=>{
+    const c = line.split(',');
+    b.insertAdjacentHTML('beforeend',
+      `<tr><td>${c[idx('school_name')]||''}</td>
+           <td>${c[idx('player_name')]||''}</td>
+           <td>${c[idx('position')]||''}</td>
+           <td style="text-align:right">${c[idx('AI_score')]||''}</td>
+           <td>${c[idx('basis')]||''}</td></tr>`);
+  });
+}
+run();
+</script>
