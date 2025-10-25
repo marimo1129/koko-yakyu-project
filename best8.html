@@ -1,0 +1,99 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>秋季大会 ベスト8</title>
+</head>
+<body>
+  <header>
+    <h1>秋季大会 ベスト8（準々決勝出場校）</h1>
+    <p>
+      表示対象の年をクエリで変更できます：
+      <code>?year=2025</code>（例）
+    </p>
+  </header>
+
+  <main id="list"><p>読み込み中...</p></main>
+
+  <script>
+  // ?year=2025 のように指定（未指定なら 2025 にしています）
+  const YEAR = new URLSearchParams(location.search).get("year") || "2025";
+  const CSV  = `data/best8_autumn_${YEAR}.csv`;
+
+  // とても簡単なCSVパーサ（カンマを含まない前提）
+  function parseCSV(text) {
+    const lines = text.trim().split(/\r?\n/);
+    const head = lines[0].split(",");
+    const idx  = Object.fromEntries(head.map((h, i) => [h, i]));
+    return lines.slice(1).map(line => {
+      const c = line.split(",");
+      return {
+        year: c[idx.year],
+        prefecture: c[idx.prefecture],
+        url: c[idx.url],
+        qf: [
+          c[idx.qf1], c[idx.qf2], c[idx.qf3], c[idx.qf4],
+          c[idx.qf5], c[idx.qf6], c[idx.qf7], c[idx.qf8],
+        ].filter(Boolean)
+      };
+    });
+  }
+
+  async function main() {
+    try {
+      const res  = await fetch(CSV, {cache: "no-store"});
+      if (!res.ok) throw new Error(`CSV not found: ${CSV}`);
+      const text = await res.text();
+      const rows = parseCSV(text);
+      render(rows);
+    } catch (e) {
+      document.getElementById("list").innerHTML =
+        `<p style="color:#c00">CSVの読み込みに失敗しました：${e.message}</p>`;
+    }
+  }
+
+  function render(data) {
+    const wrap = document.getElementById("list");
+    if (!data.length) {
+      wrap.innerHTML = `<p>データがありません（${CSV}）。</p>`;
+      return;
+    }
+    wrap.innerHTML = "";
+    data.sort((a,b)=>a.prefecture.localeCompare(b.prefecture,"ja"));
+    data.forEach(d => {
+      const sec = document.createElement("section");
+      sec.className = "card";
+      sec.innerHTML = `
+        <h2>${d.prefecture}</h2>
+        <p class="src"><a href="${d.url}" target="_blank" rel="noopener">大会ページ</a></p>
+        <ol class="grid">
+          ${d.qf.map(n => `<li>${n || "-"}</li>`).join("")}
+        </ol>
+      `;
+      wrap.appendChild(sec);
+    });
+  }
+
+  main();
+  </script>
+
+  <style>
+    :root{
+      --bg:#0f0f12; --panel:#1b1d22; --border:#2a2d33; --text:#e9edf1; --muted:#aab3be; --link:#5aa8ff;
+    }
+    html,body{margin:0;padding:0;background:var(--bg);color:var(--text);font-family:system-ui,-apple-system,Segoe UI,Roboto,"Noto Sans JP",sans-serif}
+    header{padding:24px 20px;border-bottom:1px solid var(--border)}
+    h1{margin:0 0 6px;font-size:22px}
+    code{background:var(--panel);padding:2px 6px;border-radius:6px;border:1px solid var(--border)}
+    main{padding:16px 20px;max-width:1100px;margin:0 auto}
+    .card{background:var(--panel);border:1px solid var(--border);border-radius:12px;padding:16px;margin:12px 0;box-shadow:0 2px 6px rgba(0,0,0,.25)}
+    .card h2{margin:0 0 6px;font-size:18px}
+    .card .src{margin:0 0 10px}
+    a{color:var(--link);text-decoration:none}
+    a:hover{text-decoration:underline}
+    .grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px;padding-left:18px}
+    li{background:#252932;border:1px solid var(--border);border-radius:8px;padding:8px;min-height:28px}
+  </style>
+</body>
+</html>
