@@ -25,7 +25,23 @@ jobs:
 
       - name: Collect scores
         run: python scripts/collect_scores.py
-      
+            
+      - name: Debug hb_tournaments.yml
+        run: |
+          python - <<'PY'
+          import yaml, sys, pathlib
+          p = pathlib.Path('data/hb_tournaments.yml')
+          print('exists:', p.exists(), 'size:', p.stat().st_size if p.exists() else 'N/A')
+          if p.exists():
+              cfg = yaml.safe_load(p.read_text(encoding='utf-8'))
+              print('keys:', list(cfg.keys()))
+              print('year:', cfg.get('year'))
+              items = cfg.get('autumn_pref') or cfg.get('autumn_prefs') or []
+              print('autumn count:', len(items))
+              for i, it in enumerate(items[:3], 1):
+                  print(f'{i}:', it)
+          PY
+
       - name: Build Autumn Best8
         run: python scripts/build_best8.py
 
