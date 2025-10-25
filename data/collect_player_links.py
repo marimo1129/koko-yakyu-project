@@ -42,13 +42,33 @@ def fetch_html(url: str, retry: int = 2, timeout: int = 12) -> Optional[str]:
         time.sleep(SLEEP * (i + 1))
     return None
 
-
 def norm_text(s: str) -> str:
-    return re.sub(r"\s+", "", s)
+    """学校名の表記ゆらぎを吸収する正規化"""
+    if not s:
+        return ""
+    s = s.strip()
+    # 空白・記号を除去
+    s = re.sub(r"\s+", "", s)
+    s = re.sub(r"[『』「」()（）･・‐ｰ－―–—]", "", s)
+    # よくある接尾辞・接頭辞
+    s = re.sub(r"(高等学校|高等|高校|高|學園|学園|校)$", "", s)
+    s = re.sub(r"^(市立|県立|府立|道立|私立|公立)", "", s)
+    # ひらがな・カタカナの統一（簡易）
+    table = str.maketrans("ぁ-ん", "ァ-ン")
+    s = s.translate(table)
+    return s
 
+def _sim(a: str, b: str) -> float:
+    """2文字N-gramのJaccard類似度（簡易）"""
+    def bigrams(x):
+        return set([x[i:i+2] for i in range(max(1, len(x)-1))])
+    A, B = bigrams(a), bigrams(b)
+    if not A or not B:
+        return 0.0
+    return len(A & B) / len(A | B)
 
 def find_school_links_from_tournament(tournament_url: str, school_names: List[str]) -> Dict[str, str]:
-    """大会ページからベスト8校の学校ページ(/school/xxxx)リンクを探す"""
+    """大会ページからベスト8校の学校ページ(/school/xxxx)リンクを探す（あいまい一致版）"""
     html = fetch_html(tournament_url)
     result: Dict[str, str] = {}
     if not html:
@@ -56,32 +76,47 @@ def find_school_links_from_tournament(tournament_url: str, school_names: List[st
 
     soup = BeautifulSoup(html, "lxml")
     anchors = soup.find_all("a", href=True)
+
+    # 事前に /school/ の候補を全部メモ
+    school_cands = []
+    for a in anchors:
+        href = a["href"]
+        if "/school/" not in href:
+            continue
+        text = a.get_text(" ", strip=True)
+        # 親要素のテキストも拾っておく（周辺に学校名があることがある）
+        parent = a.find_parent()
+        ptext = parent.get_text(" ", strip=True) if parent else ""
+        school_cands.append({
+            "href": urljoin(tournament_url, href),
+            "text": text,
+            "near": ptext,
+            "norm_text": norm_text(text),
+            "norm_near": norm_text(ptext),
+        })
+
+    # 各学校名に最も近い候補を割り当て
     for school in school_names:
         ns = norm_text(school)
-        # 選定ルール:
-        #  - アンカーテキストか周辺テキストに学校名が含まれる
-        #  - hrefに '/school/' を含む
-        best = None
-        for a in anchors:
-            t = a.get_text(strip=True)
-            href = a["href"]
-            if "/school/" in href and ns in norm_text(t):
-                best = urljoin(tournament_url, href)
-                break
-        if not best:
-            # テキストに学校名が無くても、近傍（親要素）で拾う簡易策
-            for a in anchors:
-                href = a["href"]
-                if "/school/" in href:
-                    parent = a.find_parent()
-                    pt = parent.get_text(" ", strip=True) if parent else ""
-                    if ns in norm_text(pt):
-                        best = urljoin(tournament_url, href)
-                        break
-        if best:
-            result[school] = best
-    return result
+        best_href, best_score = None, -1.0
 
+        for c in school_cands:
+            # 1) 片方がもう片方を含むなら強い一致
+            if ns and (ns in c["norm_text"] or ns in c["norm_near"] or c["norm_text"] in ns or c["norm_near"] in ns):
+                score = 1.0
+            else:
+                # 2) 類似度で判定
+                score = max(_sim(ns, c["norm_text"]), _sim(ns, c["norm_near"]))
+
+            if score > best_score:
+                best_score = score
+                best_href = c["href"]
+
+        # 閾値（0.35）以上なら採用。低すぎると誤爆が増えるため。
+        if best_href and best_score >= 0.35:
+            result[school] = best_href
+
+    return result
 
 def pick_player_links_from_school(school_url: str, top_n: int = 2) -> List[Dict]:
     """学校ページから選手ページ(/player/xxxx)リンクを上位N件拾う"""
@@ -211,3 +246,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+
