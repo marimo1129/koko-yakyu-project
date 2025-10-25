@@ -125,41 +125,53 @@ def collect_names_in_block(block) -> List[str]:
     return list(ret.keys())
 
 
-def collect_pairs_by_score(block) -> List[Tuple[str, str]]:
+def collect_pairs_by_score(block) -> list[tuple[str, str]]:
     """
-    "東海大相模 4-3 横浜" のような行から (left,right) を抽出。
+    ブロック内から「A 4-3 B」のようなスコア行を見つけ、左右のチーム名を返す。
+    ナビやリンク類を拾わないため “スコア行だけ” をソースにする。
     """
-    pairs: List[Tuple[str, str]] = []
-    for tag in block.find_all(["li", "p", "td", "div", "span"]):
+    pairs: list[tuple[str, str]] = []
+    for tag in block.find_all(["li", "p", "td", "div", "span", "a"]):
         text = norm(tag.get_text())
         m = SCORE_RE.search(text)
         if not m:
             continue
-        # スコアの前後にある単語をチーム名候補として拾う
+        # スコアの左右をそのまま使う（余計な語を落とす程度の軽い整形）
         left = text[:m.start()].strip("　 \t:|（）()[]<>")
         right = text[m.end():].strip("　 \t:|（）()[]<>")
-        # 分割を少し強めに（記号で区切る）
+
+        # よくある区切りで余分を削る
         left = re.split(r"[、,\s/・]", left)[-1] if left else ""
         right = re.split(r"[、,\s/・]", right)[0] if right else ""
+
+        # 片方でも空なら捨てる
         if left and right:
             pairs.append((left, right))
     return pairs
 
-
-def extract_best8_from_soup(soup: BeautifulSoup) -> List[str]:
+def extract_best8_from_soup(soup: BeautifulSoup) -> list[str]:
     """
-    ページからベスト8相当を抽出（ヒューリスティック）
-    優先順：
-      1. 「準々決勝」「ベスト8」「４回戦」など、見出し直下のaタグやリストから抽出
-      2. スコア行から左右のチーム名を抽出し重複除去
+    準々決勝/ベスト8/4回戦の見出しブロックがあれば、まずそこから
+    スコア行だけでチーム名を集める。なければページ全体からスコア行だけで集める。
     """
-    # 1) セクション検出（見出し）
-    # hタグのテキストに対象語が入っているものを拾う
     HEAD_PAT = re.compile(r"(準々決勝|ベスト8|ベスト８|4回戦|４回戦)")
-    blocks = []
+    picked: "OrderedDict[str, bool]" = OrderedDict()
+
+    def uniq_push(name: str):
+        name = norm(name)
+        if not name:
+            return
+        # ナビ等の誤検知をさらに防ぐための簡易フィルタ
+        ban = {"高校野球ドットコム","tiktok","TikTok","Facebook","Instagram","Youtube","YouTube",
+               "新着記事","選手名鑑","チーム一覧","大会ページ","大会","ブロック","対戦","代表"}
+        if name in ban or len(name) > 20:
+            return
+        picked[name] = True
+
+    # 1) 準々決勝/ベスト8/4回戦のセクションがあれば優先
     for h in soup.find_all(re.compile(r"^h[1-6]$")):
         if HEAD_PAT.search(norm(h.get_text())):
-            # 次の見出しまでをそのセクションとみなす
+            # 見出しの次セクションを1ブロックとして抽出
             seg = []
             for sib in h.next_siblings:
                 if getattr(sib, "name", None) and re.match(r"^h[1-6]$", sib.name):
@@ -168,38 +180,19 @@ def extract_best8_from_soup(soup: BeautifulSoup) -> List[str]:
             container = BeautifulSoup("", "html.parser").new_tag("div")
             for s in seg:
                 container.append(s)
-            blocks.append(container)
 
-    picked: "OrderedDict[str, bool]" = OrderedDict()
+            for a, b in collect_pairs_by_score(container):
+                uniq_push(a); uniq_push(b)
+                if len(picked) >= 8:
+                    return list(picked.keys())[:8]
 
-    # 1-1) 見出し直下のa/リストから直取り
-    for blk in blocks:
-        # aタグ等からベタ取り
-        for name in collect_names_in_block(blk):
-            uniq_push(picked, name)
-        # スコア行 → ペア抽出
-        for a, b in collect_pairs_by_score(blk):
-            uniq_push(picked, a)
-            uniq_push(picked, b)
-        if len(picked) >= 8:
-            return list(picked.keys())[:8]
-
-    # 2) ページ全体からスコア行を拾い上げる（保険）
+    # 2) フォールバック：ページ全体からスコアで拾う
     for a, b in collect_pairs_by_score(soup):
-        uniq_push(picked, a)
-        uniq_push(picked, b)
+        uniq_push(a); uniq_push(b)
         if len(picked) >= 8:
             return list(picked.keys())[:8]
-
-    # 3) それでも足りなければ、aタグ列挙から学校名候補を足していく
-    if len(picked) < 8:
-        for name in collect_names_in_block(soup):
-            uniq_push(picked, name)
-            if len(picked) >= 8:
-                break
 
     return list(picked.keys())[:8]
-
 
 # ---------------------------
 # メイン
