@@ -1,11 +1,132 @@
 # data/hb_tournaments.yml
+# ここを実行年に。Actionsの入力(koko_year)が指定された場合はそちらが優先されます。
 year: 2025
 
+# ===========================
+# 秋季：都道府県（47）
+# ===========================
 autumn_pref:
-  - { url: "https://www.hb-nippon.com/tournaments/＜ここに東京都の秋季大会URL＞", name: "東京都 秋季大会" }
+  - { url: "https://www.hb-nippon.com/tournaments/1046", name: "北海道 秋季大会" }
+  - { url: "https://www.hb-nippon.com/tournaments/853", name: "青森県 秋季大会" }
+  - { url: "https://www.hb-nippon.com/tournaments/965", name: "岩手県 秋季大会" }
+  - { url: "https://www.hb-nippon.com/tournaments/944", name: "宮城県 秋季大会" }
+  - { url: "https://www.hb-nippon.com/tournaments/934", name: "秋田県 秋季大会" }
+  - { url: "https://www.hb-nippon.com/tournaments/943", name: "山形県 秋季大会" }
+  - { url: "https://www.hb-nippon.com/tournaments/928", name: "福島県 秋季大会" }
+  - { url: "https://www.hb-nippon.com/tournaments/979", name: "茨城県 秋季大会" }
+  - { url: "https://www.hb-nippon.com/tournaments/925", name: "栃木県 秋季大会" }
+  - { url: "https://www.hb-nippon.com/tournaments/891", name: "群馬県 秋季大会" }
+  - { url: "https://www.hb-nippon.com/tournaments/983", name: "埼玉県 秋季大会" }
+  - { url: "https://www.hb-nippon.com/tournaments/958", name: "千葉県 秋季大会" }
+  - { url: "https://www.hb-nippon.com/tournaments/1063", name: "東京都 秋季大会" }
+  - { url: "https://www.hb-nippon.com/tournaments/932", name: "神奈川県 秋季大会" }
+  - { url: "https://www.hb-nippon.com/tournaments/852", name: "山梨県 秋季大会" }
+  - { url: "https://www.hb-nippon.com/tournaments/898", name: "新潟県 秋季大会" }
+  - { url: "https://www.hb-nippon.com/tournaments/872", name: "富山県 秋季大会" }
+  - { url: "https://www.hb-nippon.com/tournaments/892", name: "石川県 秋季大会" }
+  - { url: "https://www.hb-nippon.com/tournaments/899", name: "福井県 秋季大会" }
+  - { url: "https://www.hb-nippon.com/tournaments/981", name: "長野県 秋季大会" }
+  - { url: "https://www.hb-nippon.com/tournaments/911", name: "岐阜県 秋季大会" }
+  - { url: "https://www.hb-nippon.com/tournaments/952", name: "静岡県 秋季大会" }
+  - { url: "https://www.hb-nippon.com/tournaments/954", name: "愛知県 秋季大会" }
+  - { url: "https://www.hb-nippon.com/tournaments/850", name: "三重県 秋季大会" }
+  - { url: "https://www.hb-nippon.com/tournaments/849", name: "滋賀県 秋季大会" }
+  - { url: "https://www.hb-nippon.com/tournaments/833", name: "京都府 秋季大会" }
+  - { url: "https://www.hb-nippon.com/tournaments/999", name: "大阪府 秋季大会" }
+  - { url: "https://www.hb-nippon.com/tournaments/945", name: "兵庫県 秋季大会" }
+  - { url: "https://www.hb-nippon.com/tournaments/834", name: "奈良県 秋季大会" }
+  - { url: "https://www.hb-nippon.com/tournaments/986", name: "和歌山県 秋季大会" }
+  - { url: "https://www.hb-nippon.com/tournaments/927", name: "鳥取県 秋季大会" }
+  - { url: "https://www.hb-nippon.com/tournaments/978", name: "島根県 秋季大会" }
+  - { url: "https://www.hb-nippon.com/tournaments/982", name: "岡山県 秋季大会" }
+  - { url: "https://www.hb-nippon.com/tournaments/980", name: "広島県 秋季大会" }
+  - { url: "https://www.hb-nippon.com/tournaments/998", name: "山口県 秋季大会" }
+  - { url: "https://www.hb-nippon.com/tournaments/933", name: "徳島県 秋季大会" }
+  - { url: "https://www.hb-nippon.com/tournaments/917", name: "香川県 秋季大会" }
+  - { url: "https://www.hb-nippon.com/tournaments/993", name: "愛媛県 秋季大会" }
+  - { url: "https://www.hb-nippon.com/tournaments/912", name: "高知県 秋季大会" }
+  - { url: "https://www.hb-nippon.com/tournaments/832", name: "福岡県 秋季大会" }
+  - { url: "https://www.hb-nippon.com/tournaments/947", name: "佐賀県 秋季大会" }
+  - { url: "https://www.hb-nippon.com/tournaments/948", name: "長崎県 秋季大会" }
+  - { url: "https://www.hb-nippon.com/tournaments/931", name: "熊本県 秋季大会" }
+  - { url: "https://www.hb-nippon.com/tournaments/956", name: "大分県 秋季大会" }
+  - { url: "https://www.hb-nippon.com/tournaments/918", name: "宮崎県 秋季大会" }
+  - { url: "https://www.hb-nippon.com/tournaments/951", name: "鹿児島県 秋季大会" }
+  - { url: "https://www.hb-nippon.com/tournaments/831", name: "沖縄県 秋季大会" }
 
-# とりあえず他のセクションはまだ空でOK
-autumn_regions: []
-jingu: []
-senbatsu: []
-spring_pref: []
+# ===========================
+# 秋季：地区（東北/関東/北信越/東海/近畿/中国/四国/九州）
+# ===========================
+autumn_regions:
+  - { url: "https://www.hb-nippon.com/tournaments/1045", name: "東北 秋季大会" }
+  - { url: "https://www.hb-nippon.com/tournaments/1072", name: "関東 秋季大会" }
+  - { url: "https://www.hb-nippon.com/tournaments/1053", name: "北信越 秋季大会" }
+  - { url: "https://www.hb-nippon.com/tournaments/1065", name: "東海 秋季大会" }
+  - { url: "https://www.hb-nippon.com/tournaments/1095", name: "近畿 秋季大会" }
+  - { url: "https://www.hb-nippon.com/tournaments/1092", name: "中国 秋季大会" }
+  - { url: "https://www.hb-nippon.com/tournaments/1094", name: "四国 秋季大会" }
+  - { url: "https://www.hb-nippon.com/tournaments/1105", name: "九州 秋季大会" }
+
+# ===========================
+# 明治神宮大会
+# ===========================
+jingu:
+  - { url: "", name: "明治神宮大会" }
+
+# ===========================
+# 春のセンバツ
+# ===========================
+senbatsu:
+  - { url: "", name: "選抜(センバツ)" }
+
+# ===========================
+# 春季：都道府県（47）
+# ===========================
+spring_pref:
+  - { url: "", name: "北海道 春季大会" }
+  - { url: "", name: "青森県 春季大会" }
+  - { url: "", name: "岩手県 春季大会" }
+  - { url: "", name: "宮城県 春季大会" }
+  - { url: "", name: "秋田県 春季大会" }
+  - { url: "", name: "山形県 春季大会" }
+  - { url: "", name: "福島県 春季大会" }
+  - { url: "", name: "茨城県 春季大会" }
+  - { url: "", name: "栃木県 春季大会" }
+  - { url: "", name: "群馬県 春季大会" }
+  - { url: "", name: "埼玉県 春季大会" }
+  - { url: "", name: "千葉県 春季大会" }
+  - { url: "", name: "東京都 春季大会" }
+  - { url: "", name: "神奈川県 春季大会" }
+  - { url: "", name: "新潟県 春季大会" }
+  - { url: "", name: "富山県 春季大会" }
+  - { url: "", name: "石川県 春季大会" }
+  - { url: "", name: "福井県 春季大会" }
+  - { url: "", name: "山梨県 春季大会" }
+  - { url: "", name: "長野県 春季大会" }
+  - { url: "", name: "岐阜県 春季大会" }
+  - { url: "", name: "静岡県 春季大会" }
+  - { url: "", name: "愛知県 春季大会" }
+  - { url: "", name: "三重県 春季大会" }
+  - { url: "", name: "滋賀県 春季大会" }
+  - { url: "", name: "京都府 春季大会" }
+  - { url: "", name: "大阪府 春季大会" }
+  - { url: "", name: "兵庫県 春季大会" }
+  - { url: "", name: "奈良県 春季大会" }
+  - { url: "", name: "和歌山県 春季大会" }
+  - { url: "", name: "鳥取県 春季大会" }
+  - { url: "", name: "島根県 春季大会" }
+  - { url: "", name: "岡山県 春季大会" }
+  - { url: "", name: "広島県 春季大会" }
+  - { url: "", name: "山口県 春季大会" }
+  - { url: "", name: "徳島県 春季大会" }
+  - { url: "", name: "香川県 春季大会" }
+  - { url: "", name: "愛媛県 春季大会" }
+  - { url: "", name: "高知県 春季大会" }
+  - { url: "", name: "福岡県 春季大会" }
+  - { url: "", name: "佐賀県 春季大会" }
+  - { url: "", name: "長崎県 春季大会" }
+  - { url: "", name: "熊本県 春季大会" }
+  - { url: "", name: "大分県 春季大会" }
+  - { url: "", name: "宮崎県 春季大会" }
+  - { url: "", name: "鹿児島県 春季大会" }
+  - { url: "", name: "沖縄県 春季大会" }
