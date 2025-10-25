@@ -75,103 +75,89 @@ def fetch_html(url: str, timeout: int = 25) -> BeautifulSoup:
         print(f"[ERROR] GET failed: {url} -> {e}")
         return BeautifulSoup("", "html.parser")
 
-
-# ---------------------------
-# 解析ヘルパ
-# ---------------------------
-SCORE_RE = re.compile(r"\b(\d+)\s*[-－–]\s*(\d+)\b")
+# ========= 修正版：ここから置き換え =========
+SCORE_RE = re.compile(r"[０-９0-9]+\s*[-\-－–]\s*[０-９0-9]+")
 
 def norm(t: str) -> str:
     return re.sub(r"\s+", " ", (t or "")).strip()
 
-def uniq_push(container: "OrderedDict[str, bool]", name: str):
-    name = norm(name)
-    if not name:
-        return
-    # よくある不要語排除（必要に応じて調整）
-    ban = ["試合詳細", "大会", "ブロック", "対戦", "代表"]
-    if any(x in name for x in ban):
-        return
-    container[name] = True
+def _ban(name: str) -> bool:
+    name = name.lower()
+    ban = {"高校野球ドットコム", "tiktok", "facebook", "instagram",
+           "youtube", "新着記事", "選手名鑑", "チーム一覧", "大会ページ",
+           "代表", "対戦", "ブロック"}
+    return (name in ban) or len(name) > 25
 
-def collect_names_in_block(block) -> List[str]:
+
+def collect_pairs_by_score(root: BeautifulSoup) -> list[tuple[str, str]]:
     """
-    ブロック領域（セクション）から
-    aタグなどの見出しに含まれるチーム名っぽい文字列を抽出
-    """
-    ret = OrderedDict()
-    # aタグ優先
-    for a in block.find_all("a"):
-        text = norm(a.get_text())
-        if SCORE_RE.search(text):
-            # "A 4-3 B" の a に score が混ざることがあるので飛ばす
-            continue
-        if len(text) >= 2 and len(text) <= 20:
-            uniq_push(ret, text)
-
-    # li / p / td 等のテキストも拾う（scoreが含まれる行はペア抽出を別でやる）
-    for tag in block.find_all(["li", "p", "td", "div", "span"]):
-        text = norm(tag.get_text())
-        if not text:
-            continue
-        if SCORE_RE.search(text):
-            continue
-        # 箇条書きに学校名だけ並んでいるケースを想定
-        for piece in re.split(r"[、,\s]", text):
-            piece = norm(piece)
-            if 1 < len(piece) <= 20 and not SCORE_RE.search(piece):
-                uniq_push(ret, piece)
-
-    return list(ret.keys())
-
-
-def collect_pairs_by_score(block) -> list[tuple[str, str]]:
-    """
-    ブロック内から「A 4-3 B」のようなスコア行を見つけ、左右のチーム名を返す。
-    ナビやリンク類を拾わないため “スコア行だけ” をソースにする。
+    スコア(3-1等)を含むテキストノードを起点に、その “行”（tr/li/div）内や
+    前後の兄弟の中から <a> のチーム名を2つ集める。
     """
     pairs: list[tuple[str, str]] = []
-    for tag in block.find_all(["li", "p", "td", "div", "span", "a"]):
-        text = norm(tag.get_text())
-        m = SCORE_RE.search(text)
-        if not m:
-            continue
-        # スコアの左右をそのまま使う（余計な語を落とす程度の軽い整形）
-        left = text[:m.start()].strip("　 \t:|（）()[]<>")
-        right = text[m.end():].strip("　 \t:|（）()[]<>")
 
-        # よくある区切りで余分を削る
-        left = re.split(r"[、,\s/・]", left)[-1] if left else ""
-        right = re.split(r"[、,\s/・]", right)[0] if right else ""
+    # スコア表記を含むテキストノードを列挙
+    for txt in root.find_all(string=SCORE_RE):
+        node = txt.parent
 
-        # 片方でも空なら捨てる
-        if left and right:
-            pairs.append((left, right))
+        # そのテキストの ‘行っぽい’ コンテナを見つける
+        row = node
+        while row and (getattr(row, "name", None) not in ("tr", "li", "div")):
+            row = row.parent
+        container = row or node
+
+        def names_in(elem):
+            res = []
+            if not elem:
+                return res
+            for a in elem.find_all("a"):
+                t = norm(a.get_text())
+                if t and not _ban(t):
+                    res.append(t)
+            return res
+
+        # まず同じコンテナ内の a から抽出
+        cand = names_in(container)
+
+        # 2つ未満なら前後の “行” からも補完
+        if len(cand) < 2:
+            prev = container.find_previous(["tr", "li", "div"])
+            nxt  = container.find_next(["tr", "li", "div"])
+            cand = (names_in(prev) + cand + names_in(nxt))
+
+        # それでも足りなければ、コンテナのテキストから ‘／・ / ’ 等で分割して拾う軽い保険
+        if len(cand) < 2:
+            raw = norm(container.get_text())
+            # スコアの左右にありそうな部分を切り分け
+            m = SCORE_RE.search(raw)
+            if m:
+                left = raw[:m.start()].strip("　 \t:|（）()[]<>/・")
+                right = raw[m.end():].strip("　 \t:|（）()[]<>/・")
+                if left and right and not _ban(left) and not _ban(right):
+                    cand = [left, right]
+
+        if len(cand) >= 2:
+            pairs.append((cand[0], cand[1]))
+
     return pairs
+
 
 def extract_best8_from_soup(soup: BeautifulSoup) -> list[str]:
     """
-    準々決勝/ベスト8/4回戦の見出しブロックがあれば、まずそこから
-    スコア行だけでチーム名を集める。なければページ全体からスコア行だけで集める。
+    1) 「準々決勝/ベスト8/4回戦」セクションがあればそこでスコア起点に抽出
+    2) それ以外はページ全体からスコア起点に抽出
     """
     HEAD_PAT = re.compile(r"(準々決勝|ベスト8|ベスト８|4回戦|４回戦)")
     picked: "OrderedDict[str, bool]" = OrderedDict()
 
     def uniq_push(name: str):
         name = norm(name)
-        if not name:
-            return
-        # ナビ等の誤検知をさらに防ぐための簡易フィルタ
-        ban = {"高校野球ドットコム","tiktok","TikTok","Facebook","Instagram","Youtube","YouTube",
-               "新着記事","選手名鑑","チーム一覧","大会ページ","大会","ブロック","対戦","代表"}
-        if name in ban or len(name) > 20:
-            return
-        picked[name] = True
+        if name and not _ban(name):
+            picked[name] = True
 
-    # 1) 準々決勝/ベスト8/4回戦のセクションがあれば優先
+    # 1) 見出しセクションを優先
     for h in soup.find_all(re.compile(r"^h[1-6]$")):
         if HEAD_PAT.search(norm(h.get_text())):
-            # 見出しの次セクションを1ブロックとして抽出
             seg = []
             for sib in h.next_siblings:
                 if getattr(sib, "name", None) and re.match(r"^h[1-6]$", sib.name):
@@ -180,19 +166,21 @@ def extract_best8_from_soup(soup: BeautifulSoup) -> list[str]:
             container = BeautifulSoup("", "html.parser").new_tag("div")
             for s in seg:
                 container.append(s)
-
             for a, b in collect_pairs_by_score(container):
                 uniq_push(a); uniq_push(b)
                 if len(picked) >= 8:
                     return list(picked.keys())[:8]
 
-    # 2) フォールバック：ページ全体からスコアで拾う
+    # 2) フォールバック：ページ全体
     for a, b in collect_pairs_by_score(soup):
         uniq_push(a); uniq_push(b)
         if len(picked) >= 8:
             return list(picked.keys())[:8]
 
     return list(picked.keys())[:8]
+# ========= 置き換えここまで =========
+
+
 
 # ---------------------------
 # メイン
