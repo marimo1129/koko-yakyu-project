@@ -7,16 +7,13 @@ vk.sportsbull.jp の大会ページを巡回し、試合スコアを収集して
 実行:
   $ python scripts/collect_scores.py
 """
+import os
 import csv
 import re
-import time
-from dataclasses import dataclass, asdict
-from typing import List, Dict, Tuple, Optional
 import requests
 from bs4 import BeautifulSoup
 from datetime import datetime
-import asyncio
-from playwright.async_api import async_playwright
+from typing import List, Tuple
 
 # ====== ヘッダ（User-Agent）設定（既存のUA定義をこれに置き換える） ======
 # ====== 先頭付近に追加 ======
