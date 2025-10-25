@@ -43,10 +43,11 @@ SLEEP_SEC = 0.7  # アクセス間隔（優しめ）
 
 async def _fetch_next_data_with_browser(url: str) -> str:
     """
-    Playwright(Chromium)でページを開き、HTMLから __NEXT_DATA__ のJSON文字列を抜き出す
-    - networkidle は使わない（広告等で止まるため）
-    - __NEXT_DATA__ が出るまで待つ
-    - 取得は inner_text ではなく page.content() + 正規表現 で確実に
+    Playwright(Chromium)でページを開き、以下の順で文字列を返す：
+      1) HTMLから <script id="__NEXT_DATA__"> の JSON文字列を抽出（最優先）
+      2) 見つからなければ、描画後DOMから /match/ リンク(href)を集めて
+         改行区切りの文字列として返す（正規表現で拾えるようにする）
+    ※ 返り値は常に str（空文字含む）
     """
     import re
     from playwright.async_api import async_playwright
@@ -59,29 +60,52 @@ async def _fetch_next_data_with_browser(url: str) -> str:
         ctx = await browser.new_context(
             user_agent=UA.get("User-Agent"),
             locale="ja-JP",
-            extra_http_headers=UA,  # Accept/Language 等も反映
+            extra_http_headers=UA,  # Accept / Language も反映
         )
         page = await ctx.new_page()
 
-        # 早めに完了扱いにする
+        # 軽めの待機（networkidle は使わない）
         await page.goto(url, wait_until="domcontentloaded", timeout=90000)
 
-        # __NEXT_DATA__ の出現を待つ（出なければそのまま次へ）
+        # __NEXT_DATA__ の出現を少し待つ（出なければスキップ）
         try:
             await page.wait_for_selector("script#__NEXT_DATA__", timeout=45000)
         except Exception:
             pass
 
-        # HTML全体から抜く（最も堅牢）
+        # ① HTML全体から __NEXT_DATA__ を抜く
         html = await page.content()
+        m = re.search(
+            r'<script id="__NEXT_DATA__"[^>]*>(.*?)</script>',
+            html,
+            re.DOTALL | re.IGNORECASE,
+        )
+        if m and m.group(1).strip():
+            json_text = m.group(1).strip()
+            await browser.close()
+            return json_text
+
+        # ② Fallback: 描画後DOMから /match/ リンクを集めて、改行連結して返す
+        try:
+            await page.wait_for_selector("a[href*='/match/']", timeout=5000)
+        except Exception:
+            pass
+
+        elements = await page.query_selector_all("a[href*='/match/']")
+        hrefs: list[str] = []
+        for el in elements:
+            href = await el.get_attribute("href")
+            if not href:
+                continue
+            if href.startswith("/"):
+                href = BASE + href
+            if re.search(r"/koshien/game/\d+/\d+/match/\d+/?$", href):
+                hrefs.append(href)
+
         await browser.close()
 
-    m = re.search(
-        r'<script id="__NEXT_DATA__"[^>]*>(.*?)</script>',
-        html,
-        re.DOTALL | re.IGNORECASE,
-    )
-    return (m.group(1).strip() if m else "")
+    # 正規表現で /match/... を拾わせるため、テキストとして返す
+    return "\n".join(sorted(set(hrefs)))
 
 # ----------------
 # 収集対象セット
@@ -228,36 +252,40 @@ def main():
 
 if __name__ == "__main__":
     main()
+  
 def parse_listing_page(tournament_id: int) -> List[str]:
     """
-    1) requests でページを取得し、__NEXT_DATA__ から試合URLを抽出
-    2) 取れなければ Playwright(Chromium) で再取得して抽出（確実版）
+    まず requests+BS4 で __NEXT_DATA__ を探し、無ければ Playwright で
+    描画後DOMから /match/ リンクを直接収集（確実版）
     """
     url = f"{BASE}/koshien/game/{YEAR}/{tournament_id}/"
+    print(f"[INFO] Collecting tournament {tournament_id} ...")
+
+    # 1) まずは requests で __NEXT_DATA__ を試す（取れれば最速）
     soup = get_soup(url)
-
-    # まずは requests で挑戦
     script = soup.select_one("script#__NEXT_DATA__")
-    text = script.string if script and script.string else ""
+    if script and script.string:
+        import re
+        pat = re.compile(rf"/koshien/game/{YEAR}/{tournament_id}/match/\d+/")
+        links = sorted({BASE + m.group(0) for m in pat.finditer(script.string)})
+        print(f"[DEBUG] listing_page (NEXT_DATA) {url} -> {len(links)} links")
+        if links:
+            return links
+        # 取れなければブラウザへフォールバック
 
-    # ダメならブラウザで再取得
-    if not text:
-        print(f"[INFO] fallback to browser: {url}")
-        try:
-            text = asyncio.run(_fetch_next_data_with_browser(url))
-        except RuntimeError:
-            # 既にイベントループがある環境への保険
-            loop = asyncio.new_event_loop()
-            asyncio.set_event_loop(loop)
-            text = loop.run_until_complete(_fetch_next_data_with_browser(url))
-            loop.close()
+    # 2) ブラウザで描画後DOMから a[href*="/match/"] を拾う
+    print(f"[INFO] fallback to browser: {url}")
+    try:
+        links = asyncio.run(_fetch_match_links_with_browser(tournament_id))
+    except RuntimeError:
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+        links = loop.run_until_complete(_fetch_match_links_with_browser(tournament_id))
+        loop.close()
 
-    if not text:
-        print(f"[WARN] __NEXT_DATA__ not found even with browser: {url}")
+    if not links:
+        print(f"[WARN] match links not found with browser: {url}")
         return []
 
-    # 正規表現で /match/{id}/ を抜き出す
-    pat = re.compile(rf"/koshien/game/{YEAR}/{tournament_id}/match/\d+/")
-    links = sorted({(BASE + m.group(0)) for m in pat.finditer(text)})
-    print(f"[DEBUG] listing_page (NEXT_DATA) {url} -> {len(links)} links")
+    print(f"[DEBUG] listing_page (DOM) {url} -> {len(links)} links")
     return links
