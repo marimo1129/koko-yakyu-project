@@ -26,6 +26,12 @@ jobs:
       - name: Collect scores
         run: python scripts/collect_scores.py
 
+      - name: Derive best8 from matches
+        run: python scripts/derive_best8.py
+
+      - name: Build watch teams
+        run: python scripts/make_watchlist.py
+
       - name: Commit & push CSV
         run: |
           git config user.name "koko-yakyu-bot"
