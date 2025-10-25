@@ -25,6 +25,9 @@ jobs:
 
       - name: Collect scores
         run: python scripts/collect_scores.py
+      
+      - name: Build Autumn Best8
+        run: python scripts/build_best8.py
 
       - name: Derive best8 from matches
         run: python scripts/derive_best8.py
