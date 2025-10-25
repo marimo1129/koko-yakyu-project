@@ -43,69 +43,113 @@ SLEEP_SEC = 0.7  # アクセス間隔（優しめ）
 
 async def _fetch_next_data_with_browser(url: str) -> str:
     """
-    Playwright(Chromium)でページを開き、以下の順で文字列を返す：
-      1) HTMLから <script id="__NEXT_DATA__"> の JSON文字列を抽出（最優先）
-      2) 見つからなければ、描画後DOMから /match/ リンク(href)を集めて
-         改行区切りの文字列として返す（正規表現で拾えるようにする）
-    ※ 返り値は常に str（空文字含む）
+    Playwright(Chromium)でページを開き、試合リンク(/match/)を確実に収集して改行区切りで返す。
+    流れ:
+      0) 可能なら __NEXT_DATA__ をHTMLから抽出（最速）
+      1) トップページのDOMから /match/ を回収
+      2) 見つからなければ /result/ ページ群へ遷移して /match/ を回収
+      3) それでも無ければ /detail/ ページ群へ遷移して /match/ を回収
+    返り値は str（改行区切りのURL群 or ""）。既存の parse_listing_page の正規表現で拾える。
     """
     import re
+    from urllib.parse import urljoin
     from playwright.async_api import async_playwright
+
+    # tid と year を URL から推定
+    m_tid = re.search(r"/koshien/game/(\d{4})/(\d+)/", url)
+    year = m_tid.group(1) if m_tid else ""
+    tid  = m_tid.group(2) if m_tid else ""
+
+    def _normalize(href: str) -> str:
+        if not href:
+            return ""
+        return href if href.startswith("http") else urljoin(url, href)
 
     async with async_playwright() as p:
         browser = await p.chromium.launch(
-            headless=True,
-            args=["--no-sandbox", "--disable-setuid-sandbox"]
+            headless=True, args=["--no-sandbox", "--disable-setuid-sandbox"]
         )
         ctx = await browser.new_context(
             user_agent=UA.get("User-Agent"),
             locale="ja-JP",
-            extra_http_headers=UA,  # Accept / Language も反映
+            extra_http_headers=UA,
         )
         page = await ctx.new_page()
 
-        # 軽めの待機（networkidle は使わない）
+        async def _collect_match_links_on_current_page() -> list[str]:
+            els = await page.query_selector_all("a[href*='/match/']")
+            tmp = []
+            for el in els:
+                href = await el.get_attribute("href")
+                href = _normalize(href)
+                if href and re.search(rf"/koshien/game/{year}/{tid}/match/\d+/?$", href):
+                    tmp.append(href)
+            return tmp
+
+        async def _collect_links(selector_sub: str) -> list[str]:
+            els = await page.query_selector_all(f"a[href*='/{selector_sub}/']")
+            return list({_normalize(await el.get_attribute("href")) for el in els})
+
+        # ── 0) ページ取得
         await page.goto(url, wait_until="domcontentloaded", timeout=90000)
 
-        # __NEXT_DATA__ の出現を少し待つ（出なければスキップ）
+        # 0-1) __NEXT_DATA__（あれば最速）
         try:
-            await page.wait_for_selector("script#__NEXT_DATA__", timeout=45000)
+            html = await page.content()
+            m = re.search(r'<script id="__NEXT_DATA__"[^>]*>(.*?)</script>',
+                          html, re.DOTALL | re.IGNORECASE)
+            if m and m.group(1).strip():
+                # 既存の parse_listing_page は /match/ を正規表現で拾うので、
+                # この JSON 文字列を返すだけでOK
+                return m.group(1).strip()
         except Exception:
             pass
 
-        # ① HTML全体から __NEXT_DATA__ を抜く
-        html = await page.content()
-        m = re.search(
-            r'<script id="__NEXT_DATA__"[^>]*>(.*?)</script>',
-            html,
-            re.DOTALL | re.IGNORECASE,
-        )
-        if m and m.group(1).strip():
-            json_text = m.group(1).strip()
-            await browser.close()
-            return json_text
-
-        # ② Fallback: 描画後DOMから /match/ リンクを集めて、改行連結して返す
+        # 1) トップのDOMから /match/ を収集
         try:
             await page.wait_for_selector("a[href*='/match/']", timeout=5000)
         except Exception:
             pass
+        found = await _collect_match_links_on_current_page()
+        if found:
+            await browser.close()
+            return "\n".join(sorted(set(found)))
 
-        elements = await page.query_selector_all("a[href*='/match/']")
-        hrefs: list[str] = []
-        for el in elements:
-            href = await el.get_attribute("href")
-            if not href:
-                continue
-            if href.startswith("/"):
-                href = BASE + href
-            if re.search(r"/koshien/game/\d+/\d+/match/\d+/?$", href):
-                hrefs.append(href)
+        # 2) /result/ ページ群を辿って /match/ を収集
+        try:
+            result_links = await _collect_links("result")
+            for rurl in result_links[:50]:  # 念のため上限
+                await page.goto(rurl, wait_until="domcontentloaded", timeout=90000)
+                try:
+                    await page.wait_for_selector("a[href*='/match/']", timeout=5000)
+                except Exception:
+                    pass
+                found.extend(await _collect_match_links_on_current_page())
+            if found:
+                await browser.close()
+                return "\n".join(sorted(set(found)))
+        except Exception:
+            pass
+
+        # 3) /detail/ ページ群を辿って /match/ を収集（最後の手段）
+        try:
+            detail_links = await _collect_links("detail")
+            for durl in detail_links[:50]:
+                await page.goto(durl, wait_until="domcontentloaded", timeout=90000)
+                try:
+                    await page.wait_for_selector("a[href*='/match/']", timeout=5000)
+                except Exception:
+                    pass
+                found.extend(await _collect_match_links_on_current_page())
+            if found:
+                await browser.close()
+                return "\n".join(sorted(set(found)))
+        except Exception:
+            pass
 
         await browser.close()
+        return ""
 
-    # 正規表現で /match/... を拾わせるため、テキストとして返す
-    return "\n".join(sorted(set(hrefs)))
 
 # ----------------
 # 収集対象セット
