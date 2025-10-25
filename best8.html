@@ -95,5 +95,108 @@
     .grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px;padding-left:18px}
     li{background:#252932;border:1px solid var(--border);border-radius:8px;padding:8px;min-height:28px}
   </style>
+<!-- === Players Scores (2025) === -->
+<section id="players-scores" style="max-width:1000px;margin:40px auto;padding:16px;border:1px solid #eee;border-radius:12px">
+  <h2 style="margin:0 0 12px">2025 注目選手スコア</h2>
+
+  <div style="display:flex;gap:12px;align-items:center;margin:8px 0 16px">
+    <label>学校で絞り込み：
+      <select id="schoolFilter">
+        <option value="">（全校）</option>
+      </select>
+    </label>
+    <label>表示件数：
+      <select id="limit">
+        <option>10</option><option selected>20</option><option>50</option><option>100</option>
+      </select>
+    </label>
+    <button id="reload">更新</button>
+  </div>
+
+  <div style="overflow:auto">
+    <table id="scoresTable" style="width:100%;border-collapse:collapse">
+      <thead>
+        <tr>
+          <th style="text-align:left;border-bottom:1px solid #ddd;padding:8px">学校</th>
+          <th style="text-align:left;border-bottom:1px solid #ddd;padding:8px">選手</th>
+          <th style="text-align:left;border-bottom:1px solid #ddd;padding:8px">守備</th>
+          <th style="text-align:right;border-bottom:1px solid #ddd;padding:8px">AIスコア</th>
+          <th style="text-align:left;border-bottom:1px solid #ddd;padding:8px">根拠</th>
+        </tr>
+      </thead>
+      <tbody></tbody>
+    </table>
+  </div>
+</section>
+
+<script>
+// ざっくりCSVパーサ（カンマを含むダブルクォート対応）
+function parseCSV(text){
+  const rows = [];
+  let cur = '', row = [], inside = false;
+  for (let i=0;i<text.length;i++){
+    const c = text[i], n = text[i+1];
+    if (c === '"' && n === '"'){ cur += '"'; i++; continue; }
+    if (c === '"'){ inside = !inside; continue; }
+    if (c === ',' && !inside){ row.push(cur); cur=''; continue; }
+    if ((c === '\n' || c === '\r') && !inside){
+      if (cur!=='' || row.length){ row.push(cur); rows.push(row); row=[]; cur=''; }
+      continue;
+    }
+    cur += c;
+  }
+  if (cur!=='' || row.length){ row.push(cur); rows.push(row); }
+  return rows;
+}
+
+async function loadScores(){
+  const res = await fetch('data/player_scores_2025.csv'); // ここを年ごとに変える
+  const text = await res.text();
+  const rows = parseCSV(text).filter(r => r.length && r.some(x=>x.trim()!==''));
+  const header = rows[0].map(h=>h.trim());
+  const data = rows.slice(1).map(r=>{
+    const obj = {};
+    header.forEach((h,idx)=>obj[h]=r[idx] ?? '');
+    return obj;
+  });
+
+  // 欄名の想定（collect_players.py の出力に合わせています）
+  // year,school_name,player_name,position,AI_score,basis など
+  // 数値化
+  data.forEach(d => d.AI_score = parseFloat(d.AI_score || d.ai_score || d.score || 0));
+
+  // 学校プルダウンを作成
+  const schools = Array.from(new Set(data.map(d=>d.school_name).filter(Boolean))).sort();
+  const sel = document.getElementById('schoolFilter');
+  sel.innerHTML = '<option value="">（全校）</option>' + schools.map(s=>`<option>${s}</option>`).join('');
+
+  // 表示処理
+  function render(){
+    const limit = parseInt(document.getElementById('limit').value,10) || 20;
+    const filter = sel.value.trim();
+    const tbody = document.querySelector('#scoresTable tbody');
+    let filtered = data.slice();
+    if (filter) filtered = filtered.filter(d => d.school_name === filter);
+    filtered.sort((a,b)=> (b.AI_score||0) - (a.AI_score||0));
+    const rowsHTML = filtered.slice(0, limit).map(d=>`
+      <tr>
+        <td style="padding:8px;border-bottom:1px solid #f0f0f0">${d.school_name||''}</td>
+        <td style="padding:8px;border-bottom:1px solid #f0f0f0">${d.player_name||''}</td>
+        <td style="padding:8px;border-bottom:1px solid #f0f0f0">${d.position||''}</td>
+        <td style="padding:8px;border-bottom:1px solid #f0f0f0;text-align:right">${(d.AI_score??'').toString()}</td>
+        <td style="padding:8px;border-bottom:1px solid #f0f0f0">${d.basis||d.Basis||''}</td>
+      </tr>`).join('');
+    tbody.innerHTML = rowsHTML || `<tr><td colspan="5" style="padding:12px;color:#888">データがありません</td></tr>`;
+  }
+
+  document.getElementById('reload').onclick = render;
+  document.getElementById('limit').onchange = render;
+  sel.onchange = render;
+
+  render();
+}
+loadScores();
+</script>
+
 </body>
 </html>
