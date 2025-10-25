@@ -261,13 +261,16 @@ def parse_listing_page(tournament_id: int) -> List[str]:
     print(f"[DEBUG] listing_page (NEXT_DATA) {url} -> {len(links)} links")
     return links
 
+# --- ここまで既存の関数や定義がいろいろ ---
 def main():
-    print("[INFO] Collecting test tournament 628 ...")
-    listing = parse_listing_page(628)
-    print(f"[DEBUG] Found {len(listing)} match URLs:")
-    for url in listing[:5]:
-        print("  ", url)
-    print("[DONE] Test run complete")
+    # 例: 令和7(2025)年度 秋季東京都大会（hb_tid=1063）
+    hb_tid = int(os.getenv("HB_TID", "1063"))
+    year   = int(os.getenv("KOKO_YEAR", YEAR))
+    print(f"[INFO] hb-nippon 大会 {hb_tid} ({year}) を収集します")
+    rows = collect_from_hb_tournament(hb_tid, year)
+    print(f"[DEBUG] {len(rows)} rows from hb-nippon")
+    write_hb_rows_to_csv(rows)
+    print("[DONE] hb-nippon -> data/matches.csv")
 
 
 if __name__ == "__main__":
@@ -309,3 +312,73 @@ def parse_listing_page(tournament_id: int) -> List[str]:
 
     print(f"[DEBUG] listing_page (DOM) {url} -> {len(links)} links")
     return links
+# ===== hb-nippon.com（高校野球ドットコム）1大会スクレイパ =====
+def collect_from_hb_tournament(hb_tid: int, year: int) -> List[Tuple]:
+    """
+    例: hb_tid=1063 -> 令和7(2025)年度 秋季東京都大会
+    ページ: https://www.hb-nippon.com/tournaments/{hb_tid}
+    戻り値: [(date_str, round_label, team_left, score, team_right, src_url), ...]
+    """
+    import re
+    url = f"https://www.hb-nippon.com/tournaments/{hb_tid}"
+    soup = get_soup(url)
+
+    # 1) 「試合結果」セクションの先頭見出しを探す
+    header = None
+    for tag in soup.find_all(["h2", "h3"]):
+        if "試合結果" in tag.get_text(strip=True):
+            header = tag
+            break
+    if not header:
+        print(f"[WARN] 試合結果セクションが見つかりません: {url}")
+        return []
+
+    # 2) 次の見出しが来るまでを「試合結果」領域とみなして走査
+    results_block = []
+    for sib in header.next_siblings:
+        name = getattr(sib, "name", None)
+        if name in ("h2", "h3"):  # 次のセクションに到達
+            break
+        if not name:
+            continue
+        results_block.append(sib)
+
+    rows: List[Tuple] = []
+    # 日付・回戦を含むテキストから抽出し、aタグ3連（左チーム / スコア / 右チーム）で拾う
+    for block in results_block:
+        for line in block.find_all(["li", "p", "tr", "div"]):
+            a_list = line.find_all("a")
+            if len(a_list) < 3:
+                continue
+            left = a_list[0].get_text(strip=True)
+            mid  = a_list[1].get_text(strip=True)
+            right= a_list[2].get_text(strip=True)
+            if not re.match(r"^\d+\s*-\s*\d+$", mid):
+                continue
+
+            # テキスト全体から日付と回戦を拾う（例: "2025 10月19日 2回戦 ...")
+            raw = line.get_text(" ", strip=True)
+            m_date = re.search(r"(\d{1,2})月(\d{1,2})日", raw)
+            date_str = f"{year}-01-01"
+            if m_date:
+                mm, dd = m_date.groups()
+                date_str = f"{year}-{int(mm):02d}-{int(dd):02d}"
+
+            m_round = re.search(r"(決勝|準決勝|準々決勝|\d+回戦)", raw)
+            round_label = m_round.group(1) if m_round else ""
+
+            rows.append((date_str, round_label, left, mid, right, url))
+
+    return rows
+
+
+def write_hb_rows_to_csv(rows: List[Tuple], out_csv: str = "data/matches.csv") -> None:
+    os.makedirs(os.path.dirname(out_csv), exist_ok=True)
+    header = ["date", "round", "team_left", "score", "team_right", "source"]
+    exists = os.path.exists(out_csv)
+    with open(out_csv, "a", newline="", encoding="utf-8") as f:
+        w = csv.writer(f)
+        if not exists:
+            w.writerow(header)
+        for r in rows:
+            w.writerow(r)
