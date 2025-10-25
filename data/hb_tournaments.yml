@@ -71,7 +71,7 @@ autumn_regions:
 # 明治神宮大会
 # ===========================
 jingu:
-  - { url: "", name: "明治神宮大会" }
+  - { url: "https://www.hb-nippon.com/tournaments/1107", name: "明治神宮大会" }
 
 # ===========================
 # 春のセンバツ
