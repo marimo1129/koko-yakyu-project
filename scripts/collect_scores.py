@@ -43,113 +43,103 @@ SLEEP_SEC = 0.7  # アクセス間隔（優しめ）
 
 async def _fetch_next_data_with_browser(url: str) -> str:
     """
-    Playwright(Chromium)でページを開き、試合リンク(/match/)を確実に収集して改行区切りで返す。
-    流れ:
-      0) 可能なら __NEXT_DATA__ をHTMLから抽出（最速）
-      1) トップページのDOMから /match/ を回収
-      2) 見つからなければ /result/ ページ群へ遷移して /match/ を回収
-      3) それでも無ければ /detail/ ページ群へ遷移して /match/ を回収
-    返り値は str（改行区切りのURL群 or ""）。既存の parse_listing_page の正規表現で拾える。
+    Playwright でページ読込中の XHR(JSON) を傍受して試合IDを収集。
+    見つかったら /koshien/game/{year}/{tid}/match/{id}/ の行テキストを返す。
+    最後の保険として __NEXT_DATA__ や DOM の a[href*="/match/"] も試す。
+    返り値は常に str（改行区切り or 空文字）。
     """
     import re
     from urllib.parse import urljoin
     from playwright.async_api import async_playwright
 
-    # tid と year を URL から推定
-    m_tid = re.search(r"/koshien/game/(\d{4})/(\d+)/", url)
-    year = m_tid.group(1) if m_tid else ""
-    tid  = m_tid.group(2) if m_tid else ""
+    m = re.search(r"/koshien/game/(\d{4})/(\d+)/", url)
+    year = m.group(1) if m else ""
+    tid  = m.group(2) if m else ""
 
-    def _normalize(href: str) -> str:
-        if not href:
-            return ""
-        return href if href.startswith("http") else urljoin(url, href)
+    def build_match_url(mid: int | str) -> str:
+        return f"{BASE}/koshien/game/{year}/{tid}/match/{mid}/"
+
+    match_urls: set[str] = set()
 
     async with async_playwright() as p:
         browser = await p.chromium.launch(
-            headless=True, args=["--no-sandbox", "--disable-setuid-sandbox"]
+            headless=True,
+            args=["--no-sandbox", "--disable-setuid-sandbox"]
         )
         ctx = await browser.new_context(
             user_agent=UA.get("User-Agent"),
             locale="ja-JP",
             extra_http_headers=UA,
         )
+
         page = await ctx.new_page()
 
-        async def _collect_match_links_on_current_page() -> list[str]:
-            els = await page.query_selector_all("a[href*='/match/']")
-            tmp = []
-            for el in els:
-                href = await el.get_attribute("href")
-                href = _normalize(href)
-                if href and re.search(rf"/koshien/game/{year}/{tid}/match/\d+/?$", href):
-                    tmp.append(href)
-            return tmp
+        # --- XHR(JSON) を傍受 ---
+        async def on_response(resp):
+            try:
+                ctype = resp.headers.get("content-type", "")
+                url_l = resp.url.lower()
+                if "application/json" in ctype and f"/{year}/{tid}" in url_l:
+                    data = await resp.json()
+                    # よくある形: {"games":[{"id":1234, ...}, ...]}
+                    if isinstance(data, dict):
+                        # 1) games[] に id がある
+                        if "games" in data and isinstance(data["games"], list):
+                            for g in data["games"]:
+                                mid = g.get("id")
+                                if mid is not None:
+                                    match_urls.add(build_match_url(mid))
+                        # 2) deeply nested な場合も総当りで id を拾う
+                        def walk(x):
+                            if isinstance(x, dict):
+                                if "id" in x and isinstance(x["id"], (int, str)):
+                                    match_urls.add(build_match_url(x["id"]))
+                                for v in x.values(): walk(v)
+                            elif isinstance(x, list):
+                                for v in x: walk(v)
+                        walk(data)
+            except Exception:
+                pass
 
-        async def _collect_links(selector_sub: str) -> list[str]:
-            els = await page.query_selector_all(f"a[href*='/{selector_sub}/']")
-            return list({_normalize(await el.get_attribute("href")) for el in els})
+        page.on("response", on_response)
 
-        # ── 0) ページ取得
+        # --- 読み込み ---
         await page.goto(url, wait_until="domcontentloaded", timeout=90000)
+        # 追っかけで発火するXhrを待つ
+        await page.wait_for_timeout(6000)
 
-        # 0-1) __NEXT_DATA__（あれば最速）
-        try:
-            html = await page.content()
-            m = re.search(r'<script id="__NEXT_DATA__"[^>]*>(.*?)</script>',
-                          html, re.DOTALL | re.IGNORECASE)
-            if m and m.group(1).strip():
-                # 既存の parse_listing_page は /match/ を正規表現で拾うので、
-                # この JSON 文字列を返すだけでOK
-                return m.group(1).strip()
-        except Exception:
-            pass
-
-        # 1) トップのDOMから /match/ を収集
-        try:
-            await page.wait_for_selector("a[href*='/match/']", timeout=5000)
-        except Exception:
-            pass
-        found = await _collect_match_links_on_current_page()
-        if found:
+        # XHRで拾えたらそれで終了
+        if match_urls:
             await browser.close()
-            return "\n".join(sorted(set(found)))
+            return "\n".join(sorted(match_urls))
 
-        # 2) /result/ ページ群を辿って /match/ を収集
+        # --- 保険1: __NEXT_DATA__ を HTML から抜く ---
+        html = await page.content()
+        m_next = re.search(
+            r'<script id="__NEXT_DATA__"[^>]*>(.*?)</script>',
+            html, re.DOTALL | re.IGNORECASE
+        )
+        if m_next and m_next.group(1).strip():
+            await browser.close()
+            return m_next.group(1).strip()
+
+        # --- 保険2: DOM の a[href*="/match/"] を集める ---
         try:
-            result_links = await _collect_links("result")
-            for rurl in result_links[:50]:  # 念のため上限
-                await page.goto(rurl, wait_until="domcontentloaded", timeout=90000)
-                try:
-                    await page.wait_for_selector("a[href*='/match/']", timeout=5000)
-                except Exception:
-                    pass
-                found.extend(await _collect_match_links_on_current_page())
-            if found:
-                await browser.close()
-                return "\n".join(sorted(set(found)))
+            await page.wait_for_selector("a[href*='/match/']", timeout=4000)
         except Exception:
             pass
-
-        # 3) /detail/ ページ群を辿って /match/ を収集（最後の手段）
-        try:
-            detail_links = await _collect_links("detail")
-            for durl in detail_links[:50]:
-                await page.goto(durl, wait_until="domcontentloaded", timeout=90000)
-                try:
-                    await page.wait_for_selector("a[href*='/match/']", timeout=5000)
-                except Exception:
-                    pass
-                found.extend(await _collect_match_links_on_current_page())
-            if found:
-                await browser.close()
-                return "\n".join(sorted(set(found)))
-        except Exception:
-            pass
+        els = await page.query_selector_all("a[href*='/match/']")
+        for el in els:
+            href = await el.get_attribute("href")
+            if not href: 
+                continue
+            if href.startswith("/"):
+                href = urljoin(url, href)
+            if re.search(rf"/koshien/game/{year}/{tid}/match/\d+/?$", href):
+                match_urls.add(href)
 
         await browser.close()
-        return ""
-
+        return "\n".join(sorted(match_urls))
 
 # ----------------
 # 収集対象セット
