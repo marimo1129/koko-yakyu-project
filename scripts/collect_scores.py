@@ -158,3 +158,57 @@ def main():
 
 if __name__ == "__main__":
     main()
+# ===== main() をこのコードに置き換え =====
+import yaml, re, os
+
+YAML_PATH = "data/hb_tournaments.yml"
+
+def _extract_tid(url: str) -> int | None:
+    m = re.search(r"/tournaments/(\d+)", url)
+    return int(m.group(1)) if m else None
+
+def _load_tournaments_from_yaml() -> tuple[int, list[tuple[int, str, str]]]:
+    if not os.path.exists(YAML_PATH):
+        print(f"[ERROR] YAML not found: {YAML_PATH}")
+        return YEAR, []
+
+    with open(YAML_PATH, "r", encoding="utf-8") as f:
+        cfg = yaml.safe_load(f) or {}
+
+    year_cfg = int(cfg.get("year", YEAR))
+    year = int(os.getenv("KOKO_YEAR", year_cfg))
+
+    keys = ["autumn_pref", "autumn_regions", "jingu", "senbatsu", "spring_pref"]
+    todos: list[tuple[int, str, str]] = []
+    for key in keys:
+        for item in cfg.get(key, []) or []:
+            url = (item.get("url") or "").strip()
+            name = str(item.get("name", key)).strip()
+            if not url:
+                continue
+            tid = _extract_tid(url)
+            if not tid:
+                print(f"[WARN] not a tournaments page? {url}")
+                continue
+            todos.append((tid, name, url))
+
+    print(f"[INFO] Found {len(todos)} tournaments in YAML (year={year}).")
+    return year, todos
+
+def main():
+    year, todos = _load_tournaments_from_yaml()
+    if not todos:
+        print("[ERROR] No tournaments loaded from YAML. (URLが空か形式違いの可能性)")
+        return
+    total = 0
+    for tid, name, url in todos:
+        print(f"[INFO] ▶ {name} (id={tid})  {url}")
+        rows = collect_from_hb_tournament(tid, year)
+        print(f"[INFO]   {len(rows)} rows")
+        write_hb_rows_to_csv(rows)
+        total += len(rows)
+    print(f"[DONE] total appended rows: {total}")
+
+if __name__ == "__main__":
+    main()
+# ===== ここまで =====
