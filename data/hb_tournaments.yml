@@ -1,0 +1,11 @@
+# data/hb_tournaments.yml
+year: 2025
+
+autumn_pref:
+  - { url: "https://www.hb-nippon.com/tournaments/＜ここに東京都の秋季大会URL＞", name: "東京都 秋季大会" }
+
+# とりあえず他のセクションはまだ空でOK
+autumn_regions: []
+jingu: []
+senbatsu: []
+spring_pref: []
